@@ -62,6 +62,16 @@ export function inspectSource(img: CanvasImageSource & { width: number; height: 
   return { width: img.width, height: img.height, hasTransparency };
 }
 
+/** Things to know about the source image, shown before and after generating. */
+export function sourceNotes(info: SourceInfo, background: string): string[] {
+  const notes: string[] = [];
+  const side = Math.min(info.width, info.height);
+  if (info.width !== info.height) notes.push(`Not square (${info.width} × ${info.height}): the centre square is used.`);
+  if (side < SOURCE_MIN_PX) notes.push(`${side} px is below ${SOURCE_MIN_PX} px: the App Store icon is upscaled and may look soft.`);
+  if (info.hasTransparency) notes.push(`Transparent areas become ${background.toUpperCase()} on iOS (Apple doesn’t allow transparency).`);
+  return notes;
+}
+
 /**
  * Downscales in halving steps, then one final high-quality step. A single big jump (1024 → 20)
  * skips pixels and looks jagged; halving keeps small icons sharp.
@@ -125,9 +135,7 @@ export async function generateIconSet(
   const info = inspectSource(img);
   const src = squareSource(img);
 
-  if (info.width !== info.height) warnings.push(`Your image is ${info.width} × ${info.height}; it was cropped to the centre square.`);
-  if (src.width < SOURCE_MIN_PX) warnings.push(`Your image is ${src.width} px; ${SOURCE_MIN_PX} × ${SOURCE_MIN_PX} or larger looks sharper (the App Store icon is upscaled).`);
-  if (info.hasTransparency) warnings.push(`Transparent areas were filled with ${opts.background} on iOS — Apple doesn't allow transparency in app icons.`);
+  warnings.push(...sourceNotes(info, opts.background));
 
   const add = (path: string, bytes: Uint8Array, w: number, h = w) => {
     zip.file(path, bytes);

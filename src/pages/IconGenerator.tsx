@@ -1,11 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SiteHeader } from '@/components/SiteHeader';
-import { ANDROID_SAFE_DP, IOS_ICONS, SOURCE_MIN_PX, iosPixels } from '@/config/iconSizes';
-import { SWATCHES } from '@/lib/constants';
-import { generateIconSet, inspectSource, resample, squareSource, type SourceInfo } from '@/lib/iconSet';
+import { ANDROID_DENSITIES, ANDROID_SAFE_DP, IOS_ICONS, SOURCE_MIN_PX, iosPixels } from '@/config/iconSizes';
+import { generateIconSet, inspectSource, resample, sourceNotes, squareSource, type SourceInfo } from '@/lib/iconSet';
 
 const ACCEPT = ['image/png', 'image/jpeg', 'image/webp'];
 const MAX_BYTES = 20 * 1024 * 1024;
+const COLOURS = ['#FFFFFF', '#000000', '#4F46E5', '#0F172A', '#EA580C', '#047857', '#F5F5F4', '#FDE68A'];
+const PADDING = [
+  { dp: 72, label: 'Fill' },
+  { dp: 62, label: 'Comfortable' },
+  { dp: 52, label: 'Small' },
+];
+const IOS_FILES = new Set(IOS_ICONS.map(iosPixels)).size;
+const ANDROID_FILES = ANDROID_DENSITIES.length * 3;
+const TOTAL_FILES = IOS_FILES + ANDROID_FILES + 1;
+
+type Shape = 'ios' | 'circle' | 'squircle' | 'rounded' | 'square';
+const RADIUS: Record<Shape, number> = { ios: 0.2237, circle: 0.5, squircle: 0.3, rounded: 0.14, square: 0 };
 
 interface Loaded {
   name: string;
@@ -13,66 +24,69 @@ interface Loaded {
   info: SourceInfo;
 }
 
-/** Preview of the artwork as a launcher would show it: background + scaled art, clipped to a shape. */
-function previewUrl(img: HTMLImageElement, px: number, artFraction: number, bg: string, shape: 'square' | 'ios' | 'circle' | 'squircle') {
+/** The icon as a launcher draws it: background, artwork scaled to `art`, clipped to `shape`. */
+function render(src: HTMLCanvasElement, px: number, art: number, bg: string, shape: Shape) {
   const c = document.createElement('canvas');
   c.width = c.height = px;
   const ctx = c.getContext('2d')!;
   ctx.beginPath();
-  if (shape === 'circle') ctx.arc(px / 2, px / 2, px / 2, 0, Math.PI * 2);
-  else if (shape === 'ios' || shape === 'squircle') ctx.roundRect(0, 0, px, px, px * (shape === 'ios' ? 0.2237 : 0.32));
-  else ctx.rect(0, 0, px, px);
+  ctx.roundRect(0, 0, px, px, px * RADIUS[shape]);
   ctx.clip();
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, px, px);
-  const art = Math.round(px * Math.min(1, artFraction));
-  const scaled = resample(squareSource(img), art);
-  ctx.drawImage(scaled, (px - art) / 2, (px - art) / 2);
+  const a = Math.round(px * Math.min(1, art));
+  ctx.drawImage(resample(src, a), (px - a) / 2, (px - a) / 2);
   return c.toDataURL('image/png');
 }
 
-/** Standalone app icon generator: one image in, full iOS + Android icon sets out. No project needed. */
+/** Standalone app icon generator: one image in, every iOS and Android icon out. */
 export function IconGenerator() {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [background, setBackground] = useState('#FFFFFF');
   const [artDp, setArtDp] = useState(72);
+  const [appName, setAppName] = useState('My App');
+  const [showSafe, setShowSafe] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ files: number; warnings: string[] } | null>(null);
+  const [done, setDone] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [previews, setPreviews] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = (file: File | undefined) => {
     setError(null);
-    setResult(null);
+    setDone(null);
     if (!file) return;
-    if (!ACCEPT.includes(file.type)) return setError(`${file.name}: use a PNG, JPG or WebP image.`);
-    if (file.size > MAX_BYTES) return setError(`${file.name}: larger than 20 MB.`);
+    if (!ACCEPT.includes(file.type)) return setError(`${file.name} isn’t a PNG, JPG or WebP image.`);
+    if (file.size > MAX_BYTES) return setError(`${file.name} is larger than 20 MB.`);
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
-      setLoaded({ name: file.name, img, info: inspectSource(img) });
-    };
+    img.onload = () => setLoaded({ name: file.name, img, info: inspectSource(img) });
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      setError(`${file.name}: the browser can’t read this image.`);
+      setError(`The browser can’t read ${file.name}.`);
     };
     img.src = url;
   };
 
-  // Live previews for the current options
-  useEffect(() => {
-    if (!loaded) return;
-    const legacy = artDp / 72;
-    setPreviews({
-      ios: previewUrl(loaded.img, 180, 1, background, 'ios'),
-      iosSmall: previewUrl(loaded.img, 60, 1, background, 'ios'),
-      circle: previewUrl(loaded.img, 144, legacy, background, 'circle'),
-      squircle: previewUrl(loaded.img, 144, legacy, background, 'squircle'),
-      play: previewUrl(loaded.img, 144, legacy, background, 'square'),
-    });
-  }, [loaded, background, artDp]);
+  const square = useMemo(() => (loaded ? squareSource(loaded.img) : null), [loaded]);
+  const notes = loaded ? sourceNotes(loaded.info, background) : [];
+
+  const previews = useMemo(() => {
+    if (!square) return null;
+    const android = artDp / 72; // the 48 dp icon shows the 72 dp visible area
+    return {
+      ios: render(square, 120, 1, background, 'ios'),
+      ios40: render(square, 80, 1, background, 'ios'),
+      ios29: render(square, 58, 1, background, 'ios'),
+      circle: render(square, 128, android, background, 'circle'),
+      squircle: render(square, 128, android, background, 'squircle'),
+      rounded: render(square, 128, android, background, 'rounded'),
+      square: render(square, 128, android, background, 'square'),
+      play: render(square, 144, android, background, 'rounded'),
+    };
+  }, [square, background, artDp]);
+
+  useEffect(() => setDone(null), [background, artDp]);
 
   const generate = async () => {
     if (!loaded || busy) return;
@@ -87,166 +101,265 @@ export function IconGenerator() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-      setResult({ files: Object.keys(r.files).length, warnings: r.warnings });
+      setDone(Object.keys(r.files).length);
     } catch (e) {
-      setError(e instanceof Error ? `Could not generate icons: ${e.message}` : 'Could not generate icons.');
+      setError(e instanceof Error ? `Couldn’t generate the icons: ${e.message}` : 'Couldn’t generate the icons.');
     } finally {
       setBusy(false);
     }
   };
 
-  const iosCount = new Set(IOS_ICONS.map(iosPixels)).size;
+  const name = appName.trim() || 'My App';
 
   return (
     <div className="light-page">
       <SiteHeader />
-      <main className="container section icon-gen">
-        <h1 className="page-title">App icon generator</h1>
-        <p className="section__lead">
-          Upload one square image and download every icon size for iOS and Android, ready to drop into Xcode and Android
-          Studio. Everything happens in your browser.
-        </p>
+      <main className="container icongen">
+        <header className="icongen__intro">
+          <span className="pill">Free · runs in your browser</span>
+          <h1>App icon generator</h1>
+          <p>One image in, every iOS and Android icon out — ready for Xcode and Android Studio.</p>
+        </header>
 
-        <div className="icon-gen__grid">
-          <section className="icon-gen__panel">
-            <button
-              type="button"
-              className={`icon-drop ${dragging ? 'is-dragging' : ''}`}
-              onClick={() => inputRef.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                load(e.dataTransfer.files[0]);
-              }}
-            >
+        <div className="icongen__layout">
+          {/* ── Controls ── */}
+          <aside className="icongen__controls" aria-label="Icon settings">
+            <section className="icongen__step">
+              <h2>
+                <span className="icongen__num">1</span> Your icon
+              </h2>
               {loaded ? (
-                <>
-                  <img src={loaded.img.src} alt="" className="icon-drop__thumb" />
-                  <span>
-                    <strong>{loaded.name}</strong>
-                    <br />
-                    {loaded.info.width} × {loaded.info.height}
-                    {loaded.info.hasTransparency ? ' · has transparency' : ''} · click to replace
-                  </span>
-                </>
+                <div className="icongen__file">
+                  <img src={loaded.img.src} alt="" />
+                  <div>
+                    <strong title={loaded.name}>{loaded.name}</strong>
+                    <span>
+                      {loaded.info.width} × {loaded.info.height}
+                      {loaded.info.hasTransparency ? ' · transparent areas' : ''}
+                    </span>
+                  </div>
+                  <button type="button" className="btn btn--outline btn--sm" onClick={() => inputRef.current?.click()}>
+                    Replace
+                  </button>
+                </div>
               ) : (
-                <span>
-                  <strong>Drop your icon here</strong> or click to choose
-                  <br />
-                  PNG, JPG or WebP · square, {SOURCE_MIN_PX} × {SOURCE_MIN_PX} or larger
-                </span>
+                <button
+                  type="button"
+                  className={`icongen__drop ${dragging ? 'is-dragging' : ''}`}
+                  onClick={() => inputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    load(e.dataTransfer.files[0]);
+                  }}
+                >
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <strong>Drop an image or click to choose</strong>
+                  <span>
+                    Square PNG, JPG or WebP · {SOURCE_MIN_PX} × {SOURCE_MIN_PX} or larger
+                  </span>
+                </button>
               )}
-            </button>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={ACCEPT.join(',')}
-              hidden
-              onChange={(e) => {
-                load(e.target.files?.[0]);
-                e.target.value = '';
-              }}
-            />
+              <input
+                ref={inputRef}
+                type="file"
+                accept={ACCEPT.join(',')}
+                hidden
+                onChange={(e) => {
+                  load(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+              {error && (
+                <p className="icongen__error" role="alert">
+                  {error}
+                </p>
+              )}
+              {notes.length > 0 && (
+                <ul className="icongen__notes">
+                  {notes.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
-            <fieldset className="icon-gen__field">
-              <legend>Background colour</legend>
-              <p className="muted small">Fills transparent areas (iOS doesn’t allow transparency) and is the Android adaptive-icon background.</p>
-              <div className="row-gap">
-                {['#FFFFFF', '#000000', ...SWATCHES.map((s) => s.hex)].map((hex) => (
+            <section className="icongen__step">
+              <h2>
+                <span className="icongen__num">2</span> Background
+              </h2>
+              <p className="icongen__hint">Fills transparent areas on iOS and sits behind your icon on Android.</p>
+              <div className="icongen__swatches" role="radiogroup" aria-label="Background colour">
+                {COLOURS.map((hex) => (
                   <button
                     key={hex}
                     type="button"
-                    className="icon-swatch"
+                    role="radio"
+                    aria-checked={background.toLowerCase() === hex.toLowerCase()}
                     aria-label={hex}
-                    aria-pressed={background.toLowerCase() === hex.toLowerCase()}
+                    className="icongen__swatch"
                     style={{ background: hex }}
                     onClick={() => setBackground(hex)}
                   />
                 ))}
-                <input type="color" aria-label="Custom background colour" value={background} onChange={(e) => setBackground(e.target.value)} />
+                <label className="icongen__custom" title="Custom colour">
+                  <input
+                    type="color"
+                    aria-label="Custom background colour"
+                    value={background}
+                    onChange={(e) => setBackground(e.target.value)}
+                  />
+                  <span>{background.toUpperCase()}</span>
+                </label>
               </div>
-            </fieldset>
+            </section>
 
-            <fieldset className="icon-gen__field">
-              <legend>Android artwork size</legend>
-              <label className="icon-gen__range">
+            <section className="icongen__step">
+              <h2>
+                <span className="icongen__num">3</span> Android padding
+              </h2>
+              <div className="segmented icongen__presets" role="group" aria-label="Android artwork size">
+                {PADDING.map((p) => (
+                  <button key={p.dp} type="button" aria-pressed={artDp === p.dp} onClick={() => setArtDp(p.dp)}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <label className="icongen__range">
                 <input type="range" min={48} max={108} step={2} value={artDp} onChange={(e) => setArtDp(Number(e.target.value))} />
-                <span>{artDp} dp of 108</span>
+                <span>{artDp} dp</span>
               </label>
-              <p className="muted small">
-                Launchers crop adaptive icons to different shapes. Keep important details inside the middle {ANDROID_SAFE_DP} dp;
-                72 fills the visible area.
-              </p>
-            </fieldset>
+              <label className="icongen__check">
+                <input type="checkbox" checked={showSafe} onChange={(e) => setShowSafe(e.target.checked)} />
+                Show the {ANDROID_SAFE_DP} dp safe zone in the preview
+              </label>
+            </section>
 
-            <button type="button" className="btn btn--primary btn--lg" disabled={!loaded || busy} onClick={() => void generate()}>
-              {busy ? 'Generating…' : 'Download icon set (.zip)'}
-            </button>
-            {error && (
-              <p className="error-text" role="alert">
-                {error}
+            <div className="icongen__cta">
+              <button type="button" className="btn btn--primary btn--lg" disabled={!loaded || busy} onClick={() => void generate()}>
+                {busy ? 'Generating…' : `Download ${TOTAL_FILES} icons (.zip)`}
+              </button>
+              <p className="icongen__hint" role="status">
+                {done ? `✓ Downloaded ${done} icons. Unzip and follow README.txt.` : 'iOS · Android · Google Play'}
               </p>
-            )}
-            {result && (
-              <div className="icon-gen__done" role="status">
-                <p>Downloaded {result.files} icons.</p>
-                {result.warnings.length > 0 && (
-                  <ul>
-                    {result.warnings.map((w) => (
-                      <li key={w}>{w}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </section>
+            </div>
+          </aside>
 
-          <section className="icon-gen__panel" aria-label="Preview">
-            <h2 className="icon-gen__h">Preview</h2>
-            {loaded ? (
-              <div className="icon-previews">
-                <figure>
-                  <img src={previews.ios} alt="iOS home screen icon preview" width={90} height={90} />
-                  <img src={previews.iosSmall} alt="" width={30} height={30} />
-                  <figcaption>iOS</figcaption>
-                </figure>
-                <figure>
-                  <img src={previews.circle} alt="Android circle icon preview" width={72} height={72} />
-                  <figcaption>Android · circle</figcaption>
-                </figure>
-                <figure>
-                  <img src={previews.squircle} alt="Android squircle icon preview" width={72} height={72} />
-                  <figcaption>Android · squircle</figcaption>
-                </figure>
-                <figure>
-                  <img src={previews.play} alt="Google Play icon preview" width={72} height={72} />
-                  <figcaption>Google Play</figcaption>
-                </figure>
+          {/* ── Previews ── */}
+          <section className="icongen__stage" aria-label="Preview">
+            {!previews ? (
+              <div className="icongen__empty">
+                <div className="icongen__ghosts" aria-hidden="true">
+                  <span />
+                  <span className="is-circle" />
+                  <span />
+                </div>
+                <p>Upload an image to see it on an iPhone home screen, Android launchers and Google Play.</p>
               </div>
             ) : (
-              <p className="muted">Your icon previews appear here.</p>
+              <>
+                <div className="icongen__stagehead">
+                  <h2>Preview</h2>
+                  <label>
+                    App name
+                    <input type="text" value={appName} maxLength={24} onChange={(e) => setAppName(e.target.value)} />
+                  </label>
+                </div>
+
+                <article className="icongen__card icongen__card--ios">
+                  <header>iPhone</header>
+                  <div className="icongen__home">
+                    {['', '', name, ''].map((label, i) =>
+                      label ? (
+                        <figure key={i}>
+                          <img src={previews.ios} alt={`${name} on the home screen`} width={60} height={60} />
+                          <figcaption>{label}</figcaption>
+                        </figure>
+                      ) : (
+                        <figure key={i} aria-hidden="true">
+                          <span className="icongen__ghost" />
+                          <figcaption>&nbsp;</figcaption>
+                        </figure>
+                      ),
+                    )}
+                  </div>
+                  <div className="icongen__rows">
+                    <div>
+                      <img src={previews.ios40} alt="" width={40} height={40} />
+                      <span>
+                        <strong>{name}</strong>
+                        <small>Spotlight · 40 pt</small>
+                      </span>
+                    </div>
+                    <div>
+                      <img src={previews.ios29} alt="" width={29} height={29} />
+                      <span>
+                        <strong>{name}</strong>
+                        <small>Settings · 29 pt</small>
+                      </span>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="icongen__card">
+                  <header>Android launchers</header>
+                  <div className="icongen__shapes">
+                    {(['circle', 'squircle', 'rounded', 'square'] as const).map((s) => (
+                      <figure key={s}>
+                        <span className="icongen__shape">
+                          <img src={previews[s]} alt={`${s} launcher icon`} width={64} height={64} />
+                          {showSafe && <span className="icongen__safe" aria-hidden="true" />}
+                        </span>
+                        <figcaption>{s === 'square' ? 'Legacy' : s[0].toUpperCase() + s.slice(1)}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </article>
+
+                <article className="icongen__card">
+                  <header>Google Play</header>
+                  <div className="icongen__play">
+                    <img src={previews.play} alt="Google Play listing icon" width={72} height={72} />
+                    <div>
+                      <strong>{name}</strong>
+                      <span>Your company</span>
+                      <small>4.8 ★ · 10K+ downloads</small>
+                    </div>
+                    <span className="icongen__install">Install</span>
+                  </div>
+                </article>
+              </>
             )}
 
-            <h2 className="icon-gen__h">What you get</h2>
-            <ul className="icon-gen__list">
-              <li>
-                <strong>iOS</strong> — <code>AppIcon.appiconset</code> with {iosCount} sizes (iPhone, iPad, App Store 1024) and{' '}
-                <code>Contents.json</code>. Square and opaque; iOS rounds the corners.
-              </li>
-              <li>
-                <strong>Android</strong> — <code>res/mipmap-mdpi … xxxhdpi</code>: <code>ic_launcher</code>,{' '}
-                <code>ic_launcher_round</code> and the adaptive <code>ic_launcher_foreground</code>, plus{' '}
-                <code>mipmap-anydpi-v26</code> XML and the background colour.
-              </li>
-              <li>
-                <strong>Google Play</strong> — <code>playstore-icon.png</code>, 512 × 512.
-              </li>
-            </ul>
+            <details className="icongen__files">
+              <summary>
+                What’s in the ZIP <span>{TOTAL_FILES} icons</span>
+              </summary>
+              <dl>
+                <dt>iOS · {IOS_FILES} PNGs</dt>
+                <dd>
+                  <code>ios/AppIcon.appiconset/</code> with <code>Contents.json</code> — drag into Assets in Xcode. Square and
+                  opaque; iOS rounds the corners.
+                </dd>
+                <dt>Android · {ANDROID_FILES} PNGs</dt>
+                <dd>
+                  <code>android/res/mipmap-*/</code> <code>ic_launcher</code>, <code>ic_launcher_round</code> and the adaptive{' '}
+                  <code>ic_launcher_foreground</code>, plus the adaptive-icon XML and background colour — copy into{' '}
+                  <code>app/src/main/res/</code>.
+                </dd>
+                <dt>Google Play · 1 PNG</dt>
+                <dd>
+                  <code>android/playstore-icon.png</code>, 512 × 512, for the store listing.
+                </dd>
+              </dl>
+            </details>
           </section>
         </div>
       </main>
