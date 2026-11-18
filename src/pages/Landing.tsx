@@ -7,6 +7,7 @@ import { SlideView } from '@/components/SlideView';
 import { useAuth } from '@/hooks/useAuth';
 import { useEditorLink } from '@/hooks/useEditorLink';
 import { createDefaultDesign, getDevice } from '@/lib/constants';
+import { BILLING_ENABLED } from '@/config/features';
 import { formatPrice, getPrices, type Prices } from '@/services/billing';
 
 const FEATURES: { icon: IconName; title: string; body: string }[] = [
@@ -36,7 +37,7 @@ export function Landing() {
   const { user } = useAuth();
   const [prices, setPrices] = useState<Prices | null | undefined>(undefined);
   useEffect(() => {
-    void getPrices().then(setPrices);
+    if (BILLING_ENABLED) void getPrices().then(setPrices);
   }, []);
   const interval = yearly ? 'yearly' : 'monthly';
   /** Paid plans go to Billing (via sign-up when signed out), with the plan pre-selected. */
@@ -118,58 +119,60 @@ export function Landing() {
         </ol>
       </section>
 
-      <section id="pricing" className="band">
-        <div className="container section">
-          <div className="pricing__head">
-            <div>
-              <h2>Simple pricing</h2>
-              <p className="section__lead">Start free. Upgrade when you need more.</p>
+      {BILLING_ENABLED && (
+        <section id="pricing" className="band">
+          <div className="container section">
+            <div className="pricing__head">
+              <div>
+                <h2>Simple pricing</h2>
+                <p className="section__lead">Start free. Upgrade when you need more.</p>
+              </div>
+              <div className="segmented" role="group" aria-label="Billing period">
+                <button type="button" aria-pressed={!yearly} onClick={() => setYearly(false)}>
+                  Monthly
+                </button>
+                <button type="button" aria-pressed={yearly} onClick={() => setYearly(true)}>
+                  Yearly
+                </button>
+              </div>
             </div>
-            <div className="segmented" role="group" aria-label="Billing period">
-              <button type="button" aria-pressed={!yearly} onClick={() => setYearly(false)}>
-                Monthly
-              </button>
-              <button type="button" aria-pressed={yearly} onClick={() => setYearly(true)}>
-                Yearly
-              </button>
+            <div className="card-grid">
+              {PLAN_ORDER.map((id) => {
+                const p = PLANS[id];
+                const paid = isPaidPlan(id);
+                const price = paid ? prices?.[id]?.[interval] : null;
+                return (
+                  <div key={id} className={`plan ${p.popular ? 'plan--popular' : ''}`}>
+                    <div className="plan__top">
+                      <h3>{p.name}</h3>
+                      {p.popular && <span className="plan__badge">Most popular</span>}
+                    </div>
+                    <div>
+                      <span className="plan__price">{!paid ? 'Free' : price ? formatPrice(price) : prices === undefined ? '…' : 'Soon'}</span>{' '}
+                      <span className="plan__per">{!paid ? 'forever' : price ? (yearly ? '/ year' : '/ month') : ''}</span>
+                    </div>
+                    <p className="plan__blurb">{p.blurb}</p>
+                    <ul>
+                      {p.bullets.map((b) => (
+                        <li key={b.text} className={b.soon ? 'is-soon' : undefined}>
+                          <Icon name="check" size={18} />
+                          <span>
+                            {b.text}
+                            {b.soon && <span className="soon-badge">Coming soon</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link to={planLink(id)} className={`btn btn--lg ${p.popular ? 'btn--white' : 'btn--dark'}`}>
+                      {!paid ? 'Start free' : `Choose ${p.name}`}
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div className="card-grid">
-            {PLAN_ORDER.map((id) => {
-              const p = PLANS[id];
-              const paid = isPaidPlan(id);
-              const price = paid ? prices?.[id]?.[interval] : null;
-              return (
-                <div key={id} className={`plan ${p.popular ? 'plan--popular' : ''}`}>
-                  <div className="plan__top">
-                    <h3>{p.name}</h3>
-                    {p.popular && <span className="plan__badge">Most popular</span>}
-                  </div>
-                  <div>
-                    <span className="plan__price">{!paid ? 'Free' : price ? formatPrice(price) : prices === undefined ? '…' : 'Soon'}</span>{' '}
-                    <span className="plan__per">{!paid ? 'forever' : price ? (yearly ? '/ year' : '/ month') : ''}</span>
-                  </div>
-                  <p className="plan__blurb">{p.blurb}</p>
-                  <ul>
-                    {p.bullets.map((b) => (
-                      <li key={b.text} className={b.soon ? 'is-soon' : undefined}>
-                        <Icon name="check" size={18} />
-                        <span>
-                          {b.text}
-                          {b.soon && <span className="soon-badge">Coming soon</span>}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link to={planLink(id)} className={`btn btn--lg ${p.popular ? 'btn--white' : 'btn--dark'}`}>
-                    {!paid ? 'Start free' : `Choose ${p.name}`}
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section id="faq" className="container section faq">
         <h2>Questions</h2>

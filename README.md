@@ -186,6 +186,10 @@ can't be called from the browser; they are revoked for `anon` and `authenticated
 
 ## 5. Billing (Razorpay)
 
+> **Hidden by default.** The pricing section, the header's Pricing/Billing links, `/account/billing`
+> and the upgrade links only appear when `VITE_ENABLE_BILLING=true` is set (in `.env.local`, or as a
+> repository variable for the GitHub Pages build). Plan checks still apply while it's hidden.
+
 Standard and Extended are sold as monthly or yearly **Razorpay Subscriptions**.
 
 - **Plans:** names, features and limits are in `supabase/functions/_shared/plans.ts`. The pricing page,

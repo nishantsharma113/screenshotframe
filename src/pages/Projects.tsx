@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { PLANS } from '@shared/plans';
+import { BILLING_ENABLED } from '@/config/features';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SlideView } from '@/components/SlideView';
 import { useAuth } from '@/hooks/useAuth';
@@ -94,8 +95,14 @@ export function Projects() {
 
         {showUpgrade && (
           <div className="banner banner--light" role="status">
-            {PLANS[plan].name} includes {limit} projects. <Link to="/account/billing">Upgrade</Link> for unlimited projects, or
-            delete one you no longer need.
+            {PLANS[plan].name} includes {limit} projects.{' '}
+            {BILLING_ENABLED ? (
+              <>
+                <Link to="/account/billing">Upgrade</Link> for unlimited projects, or delete one you no longer need.
+              </>
+            ) : (
+              'Delete one you no longer need to create a new one.'
+            )}
           </div>
         )}
 

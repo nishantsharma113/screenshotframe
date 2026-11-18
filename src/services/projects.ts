@@ -1,3 +1,4 @@
+import { BILLING_ENABLED } from '@/config/features';
 import { createDefaultDesign, legacySizeId } from '@/lib/constants';
 import { getPreset } from '@/config/storeSizes';
 import { supabase } from '@/lib/supabase';
@@ -73,7 +74,11 @@ export async function createProject(name: string, design: Design): Promise<Proje
   if (error) {
     if (error.message.includes('PLAN_LIMIT_PROJECTS')) {
       const limit = error.message.match(/allows (\d+)/)?.[1] ?? '';
-      throw new PlanLimitError(`Your plan includes ${limit || 'a limited number of'} projects. Upgrade to create more, or delete one you no longer need.`);
+      throw new PlanLimitError(
+        BILLING_ENABLED
+          ? `Your plan includes ${limit || 'a limited number of'} projects. Upgrade to create more, or delete one you no longer need.`
+          : `Your plan includes ${limit || 'a limited number of'} projects. Delete one you no longer need to create a new one.`,
+      );
     }
     throw error;
   }

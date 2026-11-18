@@ -9,6 +9,7 @@ import { RightPanel, type FontUploadAccess } from '@/components/editor/RightPane
 import { TopBar } from '@/components/editor/TopBar';
 import { useProject } from '@/hooks/useProject';
 import { useUserFonts } from '@/hooks/useUserFonts';
+import { BILLING_ENABLED } from '@/config/features';
 import { MAX_SLIDES, PLAN_FEATURES, customFontRef, languageLabel } from '@/lib/constants';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { uploadScreenshot, validateImage } from '@/services/storage';
@@ -205,7 +206,7 @@ export function Editor() {
       <div className="editor editor--message">
         <p>{error}</p>
         <div className="row-gap">
-          {limitReached && (
+          {limitReached && BILLING_ENABLED && (
             <Link to="/account/billing" className="btn btn--primary">
               See plans
             </Link>

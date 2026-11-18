@@ -39,6 +39,8 @@ jobs:
           # in browser-only mode: no sign-in, projects saved in localStorage.
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          # Pricing and billing stay hidden unless this repository variable is "true".
+          VITE_ENABLE_BILLING: ${{ vars.VITE_ENABLE_BILLING }}
 
       # GitHub Pages has no SPA rewrites: serve the app for unknown paths (e.g. /editor/<id>).
       - run: cp dist/index.html dist/404.html

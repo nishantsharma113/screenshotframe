@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { BILLING_ENABLED } from '@/config/features';
 import { Billing } from '@/pages/Billing';
 import { Editor } from '@/pages/Editor';
 import { IconGenerator } from '@/pages/IconGenerator';
@@ -16,7 +17,7 @@ export function App() {
       <Route path="/editor/:id" element={<Editor />} />
       <Route path="/signin" element={<SignIn />} />
       <Route path="/projects" element={<Projects />} />
-      <Route path="/account/billing" element={<Billing />} />
+      {BILLING_ENABLED && <Route path="/account/billing" element={<Billing />} />}
       <Route path="/icon" element={<IconGenerator />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
