@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type DragEvent, type Keyboa
 import { Icon } from '@/components/Icon';
 import { FeatureGraphicView } from '@/components/FeatureGraphicView';
 import { SlideView, type SlideEditing } from '@/components/SlideView';
+import { getPreset, groupOf } from '@/config/storeSizes';
 import { FEATURE_GRAPHIC_SIZE, MAX_SLIDES, previewSizeFor, slideDims } from '@/lib/constants';
 import type { Design, ElementBox, SlideElement } from '@/lib/types';
 import { MAX_ELEMENT_SCALE, MIN_ELEMENT_SCALE, type EditorAction } from '@/store/editorReducer';
@@ -57,6 +58,8 @@ export function Canvas({ design, selected, dispatch, onDropOnSlide, featureSelec
   const endDrag = useRef<(() => void) | null>(null);
   const zoom = ZOOMS[zoomIndex];
   const size = previewSizeFor(design);
+  const sizePreset = getPreset(design.sizeId);
+  const groupLabel = sizePreset ? groupOf(sizePreset).label : '';
   const showFeature = design.store === 'play';
   const editingSlide = !featureSelected;
   const count = design.slides.length;
@@ -186,7 +189,7 @@ export function Canvas({ design, selected, dispatch, onDropOnSlide, featureSelec
       <div className="canvas__bar">
         <span>
           {editingSlide
-            ? `Slide ${selected + 1} of ${count} · ${size.width} × ${size.height}`
+            ? `Slide ${selected + 1} of ${count} · ${groupLabel} · ${size.width} × ${size.height}`
             : `Feature graphic · ${FEATURE_GRAPHIC_SIZE.width} × ${FEATURE_GRAPHIC_SIZE.height}`}
         </span>
         <div className="canvas__tools">

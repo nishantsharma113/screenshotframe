@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/Icon';
-import { EXPORT_SIZES, FEATURE_GRAPHIC_SIZE, languageLabel, orientationOf } from '@/lib/constants';
-import { exportScreenshots, type ExportFormat } from '@/lib/export';
+import { RequirementBadge } from '@/components/editor/SizePicker';
+import { getPreset, groupsForStore, presetsInGroup, slideCountWarnings, type SizeGroup } from '@/config/storeSizes';
+import { languageLabel, orientationOf } from '@/lib/constants';
+import { exportScreenshots, type ExportFormat, type ExportResult } from '@/lib/export';
 import type { Design } from '@/lib/types';
 
 interface ExportDialogProps {
@@ -10,27 +12,33 @@ interface ExportDialogProps {
   onClose: () => void;
 }
 
+const dims = (w: number, h: number, landscape: boolean) => (landscape ? `${h} × ${w}` : `${w} × ${h}`);
+
 export function ExportDialog({ design, projectName, onClose }: ExportDialogProps) {
   const orientation = orientationOf(design);
-  // Sizes for this store in the design's orientation (portrait or landscape).
-  const sizes = useMemo(
-    () => EXPORT_SIZES.filter((s) => s.store === design.store && s.orientation === orientation),
-    [design.store, orientation],
-  );
-  const hasFeature = design.store === 'play';
-  const [feature, setFeature] = useState(hasFeature);
-  const [picked, setPicked] = useState<Set<string>>(
-    () => new Set(sizes.filter((s) => s.devices.includes(design.device)).map((s) => s.id)),
-  );
+  const landscape = orientation === 'landscape';
+  const groups = useMemo(() => groupsForStore(design.store), [design.store]);
+  // Ticked by default: the size being edited, plus every size the store requires.
+  const [picked, setPicked] = useState<Set<string>>(() => {
+    const ids = new Set<string>();
+    if (getPreset(design.sizeId)) ids.add(design.sizeId!);
+    for (const g of groups) {
+      if (g.required?.level !== 'required') continue;
+      if (g.kind === 'icon' && !design.featureGraphic?.iconUrl) continue;
+      const first = presetsInGroup(g.id)[0];
+      if (first && !presetsInGroup(g.id).some((p) => ids.has(p.id))) ids.add(first.id);
+    }
+    return ids;
+  });
   const [locales, setLocales] = useState<Set<string>>(() => new Set(design.locales));
   const [format, setFormat] = useState<ExportFormat>('png');
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ExportResult | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const busy = progress !== null;
   const running = useRef(false);
 
-  // Focus once on open (not on every re-render, which would yank focus during export progress).
   useEffect(() => {
     dialogRef.current?.querySelector<HTMLElement>('input, button')?.focus();
   }, []);
@@ -50,22 +58,35 @@ export function ExportDialog({ design, projectName, onClose }: ExportDialogProps
     update(next);
   };
 
+  const jobs = [...picked].flatMap((id) => {
+    const preset = getPreset(id);
+    return preset ? [{ preset, orientation }] : [];
+  });
+  const pickedGroups = jobs.map((j) => j.preset.groupId);
+  const countWarnings = slideCountWarnings(pickedGroups, design.slides.length);
+  const groupKind = (g: SizeGroup) => g.kind;
+  const fileCount = jobs.reduce((n, j) => {
+    const kind = groupKind(groups.find((g) => g.id === j.preset.groupId)!);
+    return n + (kind === 'screenshot' ? design.slides.length * locales.size : kind === 'feature' ? locales.size : 1);
+  }, 0);
+
   const run = async () => {
-    if (running.current) return; // double click before the button re-renders as disabled
+    if (running.current) return;
     running.current = true;
     setError(null);
+    setResult(null);
     setProgress({ done: 0, total: 1 });
     try {
-      await exportScreenshots({
+      const r = await exportScreenshots({
         design,
-        sizes: sizes.filter((s) => picked.has(s.id)),
+        jobs,
         locales: design.locales.filter((l) => locales.has(l)),
         format,
-        featureGraphic: hasFeature && feature,
         fileName: projectName,
         onProgress: (done, total) => setProgress({ done, total }),
       });
-      onClose();
+      if (r.warnings.length) setResult(r); // keep the dialog open so the warnings can be read
+      else onClose();
     } catch (e) {
       setError(
         e instanceof Error
@@ -78,47 +99,51 @@ export function ExportDialog({ design, projectName, onClose }: ExportDialogProps
     }
   };
 
-  const fileCount = picked.size * locales.size * design.slides.length + (hasFeature && feature ? locales.size : 0);
-
   return (
     <div className="modal-backdrop" onClick={() => !busy && onClose()}>
       <div
         ref={dialogRef}
-        className="modal"
+        className="modal modal--wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-title"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal__head">
-          <h2 id="export-title">Export screenshots</h2>
+          <h2 id="export-title">Export for {design.store === 'ios' ? 'the App Store' : 'Google Play'}</h2>
           <button type="button" className="icon-btn" aria-label="Close" onClick={onClose} disabled={busy}>
             <Icon name="close" />
           </button>
         </div>
-        <p className="modal__lead">Design once — every slide is rendered at each size you pick.</p>
+        <p className="modal__lead">
+          Every slide is rendered at the exact pixel size of each size you tick{landscape ? ' (landscape)' : ''}, with no
+          transparency.
+        </p>
 
-        <fieldset className="checklist">
-          <legend className="field__label">Sizes</legend>
-          {sizes.map((s) => (
-            <label key={s.id} className="checklist__row">
-              <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(picked, s.id, setPicked)} />
-              <span className="checklist__name">{s.label}</span>
-              <span className="checklist__meta">
-                {s.width} × {s.height}
-              </span>
-            </label>
+        <div className="export-sizes">
+          {groups.map((g) => (
+            <fieldset key={g.id} className="checklist">
+              <legend className="field__label">
+                {g.label} <RequirementBadge group={g} />
+              </legend>
+              {presetsInGroup(g.id).map((p) => {
+                const noIcon = g.kind === 'icon' && !design.featureGraphic?.iconUrl;
+                return (
+                  <label key={p.id} className="checklist__row" title={noIcon ? 'Upload an app icon first (Google Play → feature graphic)' : undefined}>
+                    <input type="checkbox" checked={picked.has(p.id)} disabled={noIcon} onChange={() => toggle(picked, p.id, setPicked)} />
+                    <span className="checklist__name">
+                      {dims(p.width, p.height, landscape && g.kind === 'screenshot')}
+                      {p.id === design.sizeId && <span className="size-current"> · editing</span>}
+                    </span>
+                    <span className="checklist__meta">
+                      {g.kind === 'icon' ? (noIcon ? 'no icon uploaded' : 'from your app icon') : g.kind === 'feature' ? 'one per language' : ''}
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
           ))}
-          {hasFeature && (
-            <label className="checklist__row">
-              <input type="checkbox" checked={feature} onChange={() => setFeature((f) => !f)} />
-              <span className="checklist__name">Feature graphic</span>
-              <span className="checklist__meta">
-                {FEATURE_GRAPHIC_SIZE.width} × {FEATURE_GRAPHIC_SIZE.height}
-              </span>
-            </label>
-          )}
-        </fieldset>
+        </div>
 
         {design.locales.length > 1 && (
           <fieldset className="checklist">
@@ -132,12 +157,20 @@ export function ExportDialog({ design, projectName, onClose }: ExportDialogProps
           </fieldset>
         )}
 
+        {countWarnings.length > 0 && (
+          <ul className="export-warnings" role="status">
+            {countWarnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        )}
+
         <div className="modal__row">
           <label htmlFor="format" className="field__label">
             Format
           </label>
           <select id="format" value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
-            <option value="png">PNG</option>
+            <option value="png">PNG (24-bit, no alpha)</option>
             <option value="jpeg">JPG</option>
           </select>
           <span className="checklist__meta">{fileCount} images</span>
@@ -156,12 +189,24 @@ export function ExportDialog({ design, projectName, onClose }: ExportDialogProps
             {error}
           </p>
         )}
+        {result && (
+          <div className="export-done" role="status">
+            <p>
+              Downloaded {result.files} images. Check before uploading:
+            </p>
+            <ul className="export-warnings">
+              {result.warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="modal__actions">
           <button type="button" className="btn btn--ghost-dark" onClick={onClose} disabled={busy}>
-            Cancel
+            {result ? 'Close' : 'Cancel'}
           </button>
-          <button type="button" className="btn btn--primary" onClick={run} disabled={busy || fileCount === 0}>
+          <button type="button" className="btn btn--primary" onClick={run} disabled={busy || fileCount === 0 || locales.size === 0}>
             <Icon name="download" size={16} />
             {busy ? 'Exporting…' : 'Download ZIP'}
           </button>

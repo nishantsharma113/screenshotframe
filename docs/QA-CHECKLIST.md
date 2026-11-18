@@ -345,3 +345,19 @@ Storage cleanup *(Supabase, signed in, after `0003_rls_fixes.sql`)*. Keep the da
 **Open:** resubscribing while a cancelled period is still running starts the new subscription right away (no credit for the remaining days).
 **Open:** Razorpay doesn't allow plan changes on some UPI-mandate subscriptions; the Billing page then shows Razorpay's error. Cancel and subscribe again instead.
 
+## 23. Store size presets and export
+
+- [ ] New project: **Size** shows "iPhone · Dynamic Island, medium · 1206 × 2622 · Required". The canvas header shows the same.
+- [ ] The picker lists 9 iPhone/iPad groups (18 sizes) with badges: **Required**, **Required for iPad apps** (iPad 13"), **Required from Apr 2027** (iPhone Duo).
+- [ ] Pick iPad 11", iPhone 5.5", Duo outer/inner → the slide shape changes, the frame switches iPhone ↔ iPad, and text and device stay inside the slide. Undo returns to the previous size.
+- [ ] **Landscape** swaps the size (e.g. 2622 × 1206).
+- [ ] Switch to Google Play → Phone 1080 × 1920 (Required); the picker lists Phone, 7" and 10" tablet.
+- [ ] An existing project opens at the size it had before and looks the same (iPhone → 6.9" 1320 × 2868; iPad → 13" 2064 × 2752; Pixel → phone 1080 × 1920). An old Android tablet project moves to 1600 × 2560.
+- [ ] Export: the sizes are grouped with the same badges; the current size and the store's required sizes are ticked; the image count is right.
+- [ ] Google Play with 1 slide → "needs at least 2"; with 9 → "accepts at most 8". The App Store never warns for 1–10.
+- [ ] The app icon sizes are disabled until an icon is uploaded (feature graphic panel).
+- [ ] Tick several sizes, download → the folders are `ios/<device>/<locale>/NN.png` and `android/<device>/<locale>/NN.png`; landscape folders end in `-landscape`.
+- [ ] `node scripts/check-export.mjs <zip>` prints **OK**: exact sizes, PNG colour type 2 (24-bit, no alpha), Play ≤ 8 MB and 320–3840 px, counts within the rules.
+- [ ] Open a PNG in an image editor or `file`: "8-bit/color RGB" (no alpha).
+- [ ] Upload one PNG per store to App Store Connect / Play Console test listings → accepted.
+

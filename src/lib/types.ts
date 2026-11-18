@@ -89,6 +89,11 @@ export interface Design {
   gradient?: Gradient | null;
   /** Project background image (covers colour and gradient when set). */
   backgroundImage?: BackgroundImage | null;
+  /**
+   * Store size preset (src/config/storeSizes.ts). Missing on projects made before presets existed;
+   * normalizeDesign() fills in the closest one.
+   */
+  sizeId?: string;
   /** Missing = portrait (every project made before landscape existed). */
   orientation?: Orientation;
   /** Created the first time it's edited; only used when store is 'play'. */
@@ -137,6 +142,8 @@ export interface ExportSize {
   store: Store;
   devices: DeviceId[];
   orientation: Orientation;
+  /** Portrait width/height of the device frame's screen; missing = the device's own shape. */
+  frameAspect?: number;
 }
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'local' | 'error';
