@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { Icon } from '@/components/Icon';
-import { SWATCHES, devicesForStore, effectiveBackdrop, mixHex, orientationOf, projectBackdrop } from '@/lib/constants';
+import { SizePicker } from '@/components/editor/SizePicker';
+import { SWATCHES, effectiveBackdrop, mixHex, orientationOf, projectBackdrop } from '@/lib/constants';
 import type { Backdrop, Design } from '@/lib/types';
 import type { EditorAction } from '@/store/editorReducer';
 
@@ -36,19 +37,8 @@ export function LeftPanel({ design, selected, dispatch, uploading, onFiles, onBa
   return (
     <aside className="panel panel--left" aria-label="Design options">
       <section className="panel__section">
-        <h2 className="panel__label">Device</h2>
-        {devicesForStore(design.store).map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            className="option-row"
-            aria-pressed={design.device === d.id}
-            onClick={() => set({ device: d.id })}
-          >
-            <span>{d.label}</span>
-            <span className="option-row__note">{d.note}</span>
-          </button>
-        ))}
+        <h2 className="panel__label">Size</h2>
+        <SizePicker design={design} dispatch={dispatch} />
         <label className="field-row">
           Landscape
           <input

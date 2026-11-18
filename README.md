@@ -92,9 +92,39 @@ copied to `screenshots/<user_id>/templates/<template_id>/`, and copied again int
 from the template, so deleting a project or a template never breaks another. Find them at
 **/templates → My templates**.
 
-**Export.** Every slide is laid out at 414 px wide and the same layout is
-rasterised at each store size (e.g. 1320 × 2868 for iPhone 6.9"), so text and
-device keep their proportions. The ZIP contains `<language>/<size>/01.png …`.
+**Store sizes.** Every App Store and Google Play size lives in one file,
+`src/config/storeSizes.ts`: store, device group, name, portrait width × height, and whether it's
+required. The editor's **Size** picker, the export dialog, the ZIP folders and the slide-count
+warnings all read it.
+
+| Store | Sizes | Rules |
+|---|---|---|
+| App Store | iPhone Dynamic Island medium (**required**), 6.9", 6.5", Face ID medium, 5.5", Duo outer/inner (required from Apr 2027), iPad 13" (required for iPad apps), iPad 11", app icon 1024² | 1–10 screenshots per size; JPG/PNG, no transparency |
+| Google Play | Phone 1080 × 1920 (**required**, 2–8), 7" and 10" tablet (up to 8), feature graphic 1024 × 500, app icon 512² | each side 320–3840 px, ≤ 8 MB, JPG or 24-bit PNG |
+
+Landscape swaps width and height. Picking a size also picks its device frame. Apple sizes are real
+device screens, so the frame's screen takes the size's own shape; Google Play's 9:16 / 10:16 sizes
+keep the device's shape.
+
+**Export.** Every slide is laid out at 414 units on its short side and rendered at the **exact
+pixel size** of each size you tick. Each image is flattened onto the slide's background and written
+as a **24-bit PNG with no alpha channel** (or JPG). The export dialog warns when the slide count
+breaks a store's min/max. App icons come from the icon uploaded for the feature graphic. The ZIP is
+laid out per store, device and language, using the locale names fastlane expects:
+
+```
+ios/iphone-6.3/en-US/01.png            ios/iphone-6.9-1290x2796/en-US/01.png   (non-main size of a group)
+ios/ipad-13/de-DE/01.png               ios/iphone-6.3-landscape/en-US/01.png
+android/phone/en-US/01.png             android/feature-graphic/en-US/feature-graphic.png
+ios/app-icon/icon-1024.png             android/app-icon/icon-512.png
+```
+
+Check a ZIP before uploading: `node scripts/check-export.mjs path/to/export.zip`. It verifies every
+image's exact size (from `storeSizes.ts`), that there's no alpha channel, Google Play's 8 MB and
+320–3840 px limits, and the screenshot counts.
+
+Projects made before size presets keep their look: they're given the closest preset to the size they
+rendered at. Old Google Play tablet projects (1440 × 2560) move to the 10" tablet size (1600 × 2560).
 Fonts are self-hosted with `@fontsource` so they embed in exported images.
 
 **Storage cleanup.** When a screenshot is replaced or removed, or its slide is deleted, the file is

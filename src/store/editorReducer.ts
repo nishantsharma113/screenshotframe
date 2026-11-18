@@ -1,4 +1,4 @@
-import { MAX_SLIDES, defaultDeviceForStore, makeSlide, projectBackdrop, textFor } from '@/lib/constants';
+import { MAX_SLIDES, makeSlide, projectBackdrop, storeDefaults, textFor } from '@/lib/constants';
 import type { Backdrop, Design, ElementBox, FeatureGraphic, SlideElement, Store } from '@/lib/types';
 
 const HISTORY_LIMIT = 60;
@@ -106,7 +106,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 
     case 'setStore':
       if (action.store === d.store) return state;
-      return commit(state, { ...d, store: action.store, device: defaultDeviceForStore(action.store) });
+      return commit(state, { ...d, store: action.store, ...storeDefaults(action.store) });
 
     case 'select':
       return { ...state, selected: action.index, lastKey: null, featureSelected: false };

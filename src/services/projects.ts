@@ -1,4 +1,5 @@
-import { createDefaultDesign } from '@/lib/constants';
+import { createDefaultDesign, legacySizeId } from '@/lib/constants';
+import { getPreset } from '@/config/storeSizes';
 import { supabase } from '@/lib/supabase';
 import type { Design, Project } from '@/lib/types';
 
@@ -27,7 +28,9 @@ export function normalizeDesign(raw: Partial<Design> | null | undefined): Design
   const slides = Array.isArray(d.slides) && d.slides.length ? d.slides : base.slides;
   const locales = Array.isArray(d.locales) && d.locales.length ? d.locales : base.locales;
   const activeLocale = locales.includes(d.activeLocale) ? d.activeLocale : locales[0];
-  return { ...d, slides, locales, activeLocale };
+  // Projects from before size presets: keep the size they were made at (closest preset).
+  const sizeId = getPreset(raw?.sizeId) ? raw!.sizeId : legacySizeId(d.store, d.device);
+  return { ...d, slides, locales, activeLocale, sizeId };
 }
 
 const toProject = (row: ProjectRow): Project => ({
