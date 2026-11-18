@@ -15,7 +15,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"], "@shared/*": ["./supabase/functions/_shared/*"] }
   },
-  "include": ["src"]
+  "include": ["src", "supabase/functions/_shared/plans.ts"]
 }

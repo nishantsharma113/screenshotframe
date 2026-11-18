@@ -21,8 +21,7 @@ Without `.env.local` the app still runs: the project is saved in the browser
    This creates `profiles`, `projects`, `templates` (with 8 seed templates),
    the public `screenshots` storage bucket, and all Row Level Security policies.
    (With the Supabase CLI: `supabase link` then `supabase db push`.)
-   Then run `0002_admin.sql`, `0003_rls_fixes.sql`, `0004_fonts.sql`, `0005_user_templates.sql` and
-   `0006_translate_usage.sql` the same way, in order.
+   Then run `0002_admin.sql` … `0007_billing.sql` the same way, in order.
    To check the security rules, paste `supabase/tests/rls_test.sql` into the SQL Editor
    and run it. It ends with **All RLS checks passed**, or stops with a `FAIL: …` message.
    The test creates two throwaway users and always cleans them up.
@@ -93,9 +92,52 @@ copied to `screenshots/<user_id>/templates/<template_id>/`, and copied again int
 from the template, so deleting a project or a template never breaks another. Find them at
 **/templates → My templates**.
 
-**Export.** Every slide is laid out at 414 px wide and the same layout is
-rasterised at each store size (e.g. 1320 × 2868 for iPhone 6.9"), so text and
-device keep their proportions. The ZIP contains `<language>/<size>/01.png …`.
+**App icon generator** (`/icon`, no project or sign-in needed). Upload one square image (1024 × 1024 or
+larger) and download a ZIP with:
+
+- **iOS:** `AppIcon.appiconset` with every iPhone, iPad and App Store size and `Contents.json`, ready to
+  drop into Xcode. Icons are square and opaque; transparency is filled with your background colour.
+- **Android:** `res/mipmap-mdpi … xxxhdpi` with `ic_launcher`, `ic_launcher_round` and the adaptive
+  `ic_launcher_foreground` layer, plus `mipmap-anydpi-v26/*.xml` and the background colour resource, to
+  copy into `app/src/main/res/`.
+- **Google Play:** `playstore-icon.png` (512 × 512).
+
+Sizes are listed in `src/config/iconSizes.ts`. Downscaling is done in halving steps, so small icons
+(20–40 px) stay sharp.
+
+**Store sizes.** Every App Store and Google Play size lives in one file,
+`src/config/storeSizes.ts`: store, device group, name, portrait width × height, and whether it's
+required. The editor's **Size** picker, the export dialog, the ZIP folders and the slide-count
+warnings all read it.
+
+| Store | Sizes | Rules |
+|---|---|---|
+| App Store | iPhone Dynamic Island medium (**required**), 6.9", 6.5", Face ID medium, 5.5", Duo outer/inner (required from Apr 2027), iPad 13" (required for iPad apps), iPad 11", app icon 1024² | 1–10 screenshots per size; JPG/PNG, no transparency |
+| Google Play | Phone 1080 × 1920 (**required**, 2–8), 7" and 10" tablet (up to 8), feature graphic 1024 × 500, app icon 512² | each side 320–3840 px, ≤ 8 MB, JPG or 24-bit PNG |
+
+Landscape swaps width and height. Picking a size also picks its device frame. Apple sizes are real
+device screens, so the frame's screen takes the size's own shape; Google Play's 9:16 / 10:16 sizes
+keep the device's shape.
+
+**Export.** Every slide is laid out at 414 units on its short side and rendered at the **exact
+pixel size** of each size you tick. Each image is flattened onto the slide's background and written
+as a **24-bit PNG with no alpha channel** (or JPG). The export dialog warns when the slide count
+breaks a store's min/max. App icons come from the icon uploaded for the feature graphic. The ZIP is
+laid out per store, device and language, using the locale names fastlane expects:
+
+```
+ios/iphone-6.3/en-US/01.png            ios/iphone-6.9-1290x2796/en-US/01.png   (non-main size of a group)
+ios/ipad-13/de-DE/01.png               ios/iphone-6.3-landscape/en-US/01.png
+android/phone/en-US/01.png             android/feature-graphic/en-US/feature-graphic.png
+ios/app-icon/icon-1024.png             android/app-icon/icon-512.png
+```
+
+Check a ZIP before uploading: `node scripts/check-export.mjs path/to/export.zip`. It verifies every
+image's exact size (from `storeSizes.ts`), that there's no alpha channel, Google Play's 8 MB and
+320–3840 px limits, and the screenshot counts.
+
+Projects made before size presets keep their look: they're given the closest preset to the size they
+rendered at. Old Google Play tablet projects (1440 × 2560) move to the 10" tablet size (1600 × 2560).
 Fonts are self-hosted with `@fontsource` so they embed in exported images.
 
 **Storage cleanup.** When a screenshot is replaced or removed, or its slide is deleted, the file is
@@ -117,8 +159,8 @@ in the browser, which is limited to a few MB — the editor warns when it’s fu
 
 `profiles.plan` is `basic`, `standard` or `extended`. 3D angles, adding
 languages, uploading fonts, saving templates and auto-translate need `standard` or above (see `PLAN_FEATURES` in `constants.ts`).
-Clients can’t change their own plan (no update policy). Until billing is added,
-set it by hand:
+Clients can’t change their own plan (no update policy). Plans are bought through Razorpay
+(see **Billing** below). You can still set one by hand, for example for testing or a comped account:
 
 ```sql
 update public.profiles set plan = 'standard' where email = 'you@example.com';
@@ -141,9 +183,78 @@ Run `supabase/migrations/0002_admin.sql` once (SQL Editor → paste → Run). Th
 Admins always get `extended`, even if their `plan` column says something else. These functions
 can't be called from the browser; they are revoked for `anon` and `authenticated`.
 
-Prices on the landing page are `[YOUR PRICE]` placeholders in `src/pages/Landing.tsx`.
 
-## 5. Auto-translate (Edge Function)
+## 5. Billing (Razorpay)
+
+> **Hidden by default.** The pricing section, the header's Pricing/Billing links, `/account/billing`
+> and the upgrade links only appear when `VITE_ENABLE_BILLING=true` is set (in `.env.local`, or as a
+> repository variable for the GitHub Pages build). Plan checks still apply while it's hidden.
+
+Standard and Extended are sold as monthly or yearly **Razorpay Subscriptions**.
+
+- **Plans:** names, features and limits are in `supabase/functions/_shared/plans.ts`. The pricing page,
+  the editor's feature gates, checkout and the Billing page all read it.
+- **Prices:** read live from your Razorpay plans, so the pricing page always matches checkout.
+- **Limits:** enforced by the database (`0007_billing.sql`). Basic is capped at 3 projects; the cap is
+  checked per user under a lock, so parallel requests can't get past it. Saving templates and uploading
+  fonts also need a paid plan.
+- **Who sets the plan:** only server code. The `billing-webhook` function verifies Razorpay's signature;
+  the `billing` function verifies the checkout signature and re-reads the subscription from Razorpay.
+  The browser never sets a plan.
+
+| Event | Result |
+|---|---|
+| Payment succeeds | Plan active; `plan_renews_at` = end of the paid period; invoice recorded |
+| Renewal charged | `plan_renews_at` moves forward; invoice recorded |
+| Upgrade (or monthly → yearly) | Applies immediately |
+| Downgrade (or yearly → monthly) | Scheduled for the next renewal; the current plan continues until then |
+| Payment fails | `past_due`: plan kept while Razorpay retries (until 3 days past the period end) |
+| All retries fail | `halted`: back to Basic |
+| Cancel | Access continues until `plan_renews_at`, then Basic |
+
+`public.current_plan()` decides what a user has right now, so access ends on time even if a webhook is late.
+
+**Set up, in Razorpay test mode first:**
+
+1. Razorpay Dashboard (Test Mode) → **Settings → API Keys**: generate a test key (`rzp_test_…` and its
+   secret). Put both in `.env.local` as `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`; it's git-ignored.
+2. Create the 4 plans (Standard ₹499/month or ₹4,999/year; Extended ₹999/month or ₹9,999/year):
+
+   ```bash
+   node scripts/create-razorpay-plans.mjs
+   ```
+
+   It prints the plan ids and the `supabase secrets set` command to run. Re-running is safe: existing
+   plans are reused. To change prices, edit `PRICES` in the script and run it again (Razorpay plans can't
+   be edited, so new prices create new plans; existing subscribers keep their old price).
+3. Run `supabase/migrations/0007_billing.sql`, then deploy:
+
+   ```bash
+   supabase secrets set \
+     RAZORPAY_KEY_ID=rzp_test_xxx RAZORPAY_KEY_SECRET=xxx RAZORPAY_WEBHOOK_SECRET=choose-a-long-random-string \
+     RAZORPAY_PLAN_STANDARD_MONTHLY=plan_xxx RAZORPAY_PLAN_STANDARD_YEARLY=plan_xxx \
+     RAZORPAY_PLAN_EXTENDED_MONTHLY=plan_xxx RAZORPAY_PLAN_EXTENDED_YEARLY=plan_xxx
+
+   # Both verify callers themselves: billing checks the user's JWT (its price list is public);
+   # billing-webhook checks Razorpay's HMAC signature.
+   supabase functions deploy billing --no-verify-jwt
+   supabase functions deploy billing-webhook --no-verify-jwt
+   ```
+4. **Settings → Webhooks → Add**:
+   - **URL:** `https://YOUR-PROJECT-REF.supabase.co/functions/v1/billing-webhook`
+   - **Secret:** the same `RAZORPAY_WEBHOOK_SECRET`
+   - **Events:** `subscription.authenticated`, `.activated`, `.charged`, `.pending`, `.halted`,
+     `.cancelled`, `.completed`, `.updated`, `.paused`, `.resumed`
+5. Pay with Razorpay's test cards or UPI (see Razorpay's "Test card details" docs). To go live, repeat
+   steps 1, 2 and 4 in Live Mode and set the live secrets.
+
+Keys stay in Supabase secrets; the app only ever gets the public key id (`rzp_…`) from the function.
+
+Tests: `deno test --allow-read supabase/functions/` covers signature checks, duplicate and out-of-order
+webhooks, upgrade, downgrade, cancel, failed payment and renewal. `supabase/tests/rls_test.sql` covers
+the project cap, billing-data RLS and `current_plan()` for every state.
+
+## 5b. Auto-translate (Edge Function)
 
 In the editor, after you add a language, the right panel shows **Auto-translate to …**. It calls the
 `translate` Edge Function (`supabase/functions/translate/`). The function:
@@ -206,7 +317,6 @@ Add the production URL to Supabase’s redirect URLs.
 
 ## Not built yet (good next steps)
 
-- **Billing** — e.g. Razorpay/Stripe checkout + a Supabase Edge Function webhook that updates `profiles.plan` with the service-role key.
 - **Free-form drag-and-drop** of text and devices (current layout is “text on top / below”).
 - Deleting or renaming uploaded fonts (upload is built).
 - **Public API** for CI/CD screenshot generation (would need server-side rendering, e.g. Playwright in a worker).

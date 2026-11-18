@@ -9,6 +9,7 @@ import { RightPanel, type FontUploadAccess } from '@/components/editor/RightPane
 import { TopBar } from '@/components/editor/TopBar';
 import { useProject } from '@/hooks/useProject';
 import { useUserFonts } from '@/hooks/useUserFonts';
+import { BILLING_ENABLED } from '@/config/features';
 import { MAX_SLIDES, PLAN_FEATURES, customFontRef, languageLabel } from '@/lib/constants';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { uploadScreenshot, validateImage } from '@/services/storage';
@@ -18,7 +19,7 @@ import { saveUserTemplate } from '@/services/userTemplates';
 export function Editor() {
   const { id } = useParams();
   const [search] = useSearchParams();
-  const { state, dispatch, meta, rename, saveNow, status, error, userId, plan, loading } = useProject(
+  const { state, dispatch, meta, rename, saveNow, status, error, userId, plan, loading, limitReached } = useProject(
     id,
     search.get('template'),
     search.get('userTemplate'),
@@ -205,6 +206,11 @@ export function Editor() {
       <div className="editor editor--message">
         <p>{error}</p>
         <div className="row-gap">
+          {limitReached && BILLING_ENABLED && (
+            <Link to="/account/billing" className="btn btn--primary">
+              See plans
+            </Link>
+          )}
           {userId ? (
             <Link to="/projects" className="btn btn--primary">
               My projects

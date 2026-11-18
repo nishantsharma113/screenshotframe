@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { BILLING_ENABLED } from '@/config/features';
 import { useAuth } from '@/hooks/useAuth';
 import { useEditorLink } from '@/hooks/useEditorLink';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -14,7 +15,8 @@ export function SiteHeader() {
         <nav aria-label="Main" className="site-nav">
           <a href={`${import.meta.env.BASE_URL}#features`}>Features</a>
           <Link to="/templates">Templates</Link>
-          <a href={`${import.meta.env.BASE_URL}#pricing`}>Pricing</a>
+          <Link to="/icon">Icon generator</Link>
+          {BILLING_ENABLED && <a href={`${import.meta.env.BASE_URL}#pricing`}>Pricing</a>}
           <a href={`${import.meta.env.BASE_URL}#faq`}>FAQ</a>
         </nav>
         <div className="site-header__actions">
@@ -29,6 +31,11 @@ export function SiteHeader() {
                 <Link to="/projects" className="btn btn--ghost">
                   My projects
                 </Link>
+                {BILLING_ENABLED && (
+                  <Link to="/account/billing" className="btn btn--ghost">
+                    Billing
+                  </Link>
+                )}
                 <button type="button" className="btn btn--ghost" onClick={() => void signOut()}>
                   Sign out
                 </button>

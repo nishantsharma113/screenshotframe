@@ -1,8 +1,13 @@
-import { createDefaultDesign } from '@/lib/constants';
+import { BILLING_ENABLED } from '@/config/features';
+import { createDefaultDesign, legacySizeId } from '@/lib/constants';
+import { getPreset } from '@/config/storeSizes';
 import { supabase } from '@/lib/supabase';
 import type { Design, Project } from '@/lib/types';
 
 const LOCAL_KEY = 'shotframe:local-project';
+
+/** The server refused a new project because the plan's project limit is reached (0007_billing.sql). */
+export class PlanLimitError extends Error {}
 
 /** The row is gone (deleted elsewhere) or no longer visible to this user — retrying won't help. */
 export class ProjectGoneError extends Error {}
@@ -24,7 +29,9 @@ export function normalizeDesign(raw: Partial<Design> | null | undefined): Design
   const slides = Array.isArray(d.slides) && d.slides.length ? d.slides : base.slides;
   const locales = Array.isArray(d.locales) && d.locales.length ? d.locales : base.locales;
   const activeLocale = locales.includes(d.activeLocale) ? d.activeLocale : locales[0];
-  return { ...d, slides, locales, activeLocale };
+  // Projects from before size presets: keep the size they were made at (closest preset).
+  const sizeId = getPreset(raw?.sizeId) ? raw!.sizeId : legacySizeId(d.store, d.device);
+  return { ...d, slides, locales, activeLocale, sizeId };
 }
 
 const toProject = (row: ProjectRow): Project => ({
@@ -64,7 +71,17 @@ export async function createProject(name: string, design: Design): Promise<Proje
     .insert({ name, design })
     .select('id, name, design, updated_at')
     .single();
-  if (error) throw error;
+  if (error) {
+    if (error.message.includes('PLAN_LIMIT_PROJECTS')) {
+      const limit = error.message.match(/allows (\d+)/)?.[1] ?? '';
+      throw new PlanLimitError(
+        BILLING_ENABLED
+          ? `Your plan includes ${limit || 'a limited number of'} projects. Upgrade to create more, or delete one you no longer need.`
+          : `Your plan includes ${limit || 'a limited number of'} projects. Delete one you no longer need to create a new one.`,
+      );
+    }
+    throw error;
+  }
   return toProject(data as ProjectRow);
 }
 

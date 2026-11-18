@@ -81,7 +81,10 @@ export function SlideView({ design, slide, index, size, locale = design.activeLo
   // 414 units on the short side. Portrait: W = 414 (as before); landscape: H = 414.
   const { W, H } = slideDims(size);
   const landscape = W > H;
-  const device = getDevice(design.device);
+  // A size from another device group (e.g. exporting iPad sizes from an iPhone design) uses that
+  // group's frame; the frame's screen takes the size's own shape when the size is a real screen.
+  const device = getDevice(size.devices.length && !size.devices.includes(design.device) ? size.devices[0] : design.device);
+  const screenAspect = size.frameAspect ?? device.aspect; // portrait width / height
   const backdrop = effectiveBackdrop(design, slide);
   const fg = readableTextColor(backdropBaseColor(backdrop));
   const isLight = fg !== '#FFFFFF';
@@ -97,12 +100,12 @@ export function SlideView({ design, slide, index, size, locale = design.activeLo
   let deviceW: number;
   let deviceH: number;
   if (landscape) {
-    const aspect = 1 / device.aspect; // width / height when turned
+    const aspect = 1 / screenAspect; // width / height when turned
     deviceW = Math.min(H * device.widthRatio * aspect, W * 0.58);
     deviceH = deviceW / aspect;
   } else {
     deviceW = W * device.widthRatio;
-    deviceH = deviceW / device.aspect;
+    deviceH = deviceW / screenAspect;
   }
   const shortSide = Math.min(deviceW, deviceH); // = deviceW in portrait
   const bezel = Math.max(6, shortSide * 0.035);

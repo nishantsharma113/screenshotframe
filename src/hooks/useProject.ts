@@ -4,6 +4,7 @@ import { createDefaultDesign, defaultDeviceForStore } from '@/lib/constants';
 import { supabase } from '@/lib/supabase';
 import type { Design, SaveStatus, Template } from '@/lib/types';
 import {
+  PlanLimitError,
   ProjectGoneError,
   createProject,
   getProject,
@@ -87,6 +88,8 @@ export function useProject(routeId: string | undefined, templateId: string | nul
   const [meta, setMeta] = useState<Meta | null>(null);
   const [status, setStatus] = useState<SaveStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  /** Project creation was refused by the server's plan limit (show an upgrade prompt). */
+  const [limitReached, setLimitReached] = useState(false);
   const [retryTick, setRetryTick] = useState(0);
   const lastSaved = useRef<string | null>(null);
   /** The latest unsaved change, so it can be flushed on unload / leaving the editor. */
@@ -219,7 +222,9 @@ export function useProject(routeId: string | undefined, templateId: string | nul
         setMeta({ id: p.id, name: p.name });
         setStatus('saved');
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load the project.');
+        if (cancelled) return;
+        setLimitReached(e instanceof PlanLimitError);
+        setError(e instanceof Error ? e.message : 'Could not load the project.');
       }
     })();
 
@@ -331,5 +336,6 @@ export function useProject(routeId: string | undefined, templateId: string | nul
     userId: user?.id ?? null,
     plan,
     loading: !meta && !error,
+    limitReached,
   };
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { Plan } from '@/lib/types';
@@ -10,6 +10,8 @@ interface AuthState {
   plan: Plan;
   isAdmin: boolean;
   loading: boolean;
+  /** Re-reads the plan (e.g. after checkout). */
+  refreshPlan: () => void;
   signInWithEmail: (email: string, redirectPath?: string) => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   /** Resolves to true when the account still needs email confirmation. */
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [plan, setPlan] = useState<Plan>('basic');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [planTick, setPlanTick] = useState(0);
   const [loading, setLoading] = useState(Boolean(supabase));
 
   useEffect(() => {
@@ -60,10 +63,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  /** Whose plan is currently in state, so a refresh doesn't flash Basic for the same user. */
+  const planOwner = useRef<string | null>(null);
+
   useEffect(() => {
     const userId = session?.user.id;
-    setPlan('basic');
-    setIsAdmin(false);
+    if (planOwner.current !== (userId ?? null)) {
+      // Different (or no) user: start from Basic. A refresh for the same user keeps the
+      // current plan until the new answer arrives, so paid features don't flicker off.
+      setPlan('basic');
+      setIsAdmin(false);
+      planOwner.current = userId ?? null;
+    }
     if (!supabase || !userId) return;
     const client = supabase;
     let cancelled = false;
@@ -76,12 +87,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled || !data) return;
       const admin = (data as { is_admin?: boolean }).is_admin === true;
       setIsAdmin(admin);
-      setPlan(admin ? 'extended' : ((data.plan as Plan) ?? 'basic'));
+      // The plan the server enforces (0007: cancelled/expired/failed subscriptions fall back to
+      // Basic at the right time). Before 0007 is installed, use the stored plan.
+      const { data: effective, error: rpcErr } = await client.rpc('my_plan');
+      if (cancelled) return;
+      setPlan(!rpcErr && typeof effective === 'string' ? (effective as Plan) : admin ? 'extended' : ((data.plan as Plan) ?? 'basic'));
     })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [session?.user.id]);
+  }, [session?.user.id, planTick]);
 
   const value: AuthState = {
     user: session?.user ?? null,
@@ -89,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     plan,
     isAdmin,
     loading,
+    refreshPlan: () => setPlanTick((t) => t + 1),
     async signInWithEmail(email, redirectPath = '/projects') {
       const { error } = await requireAuthClient().signInWithOtp({
         email,

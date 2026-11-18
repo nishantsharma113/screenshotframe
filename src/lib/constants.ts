@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react';
+import { plansWith, type Feature } from '@shared/plans';
+import { DEFAULT_PRESET, closestPreset, getPreset, groupOf, presetSize } from '@/config/storeSizes';
 import type { Backdrop, Design, DeviceId, DeviceSpec, ExportSize, Orientation, Plan, SlideData, Store, Template } from './types';
 
 /**
@@ -52,10 +54,25 @@ export const DEVICES: DeviceSpec[] = [
 ];
 
 export const getDevice = (id: DeviceId): DeviceSpec => DEVICES.find((d) => d.id === id) ?? DEVICES[0];
-/** The size the canvas previews a design at (its device, in its orientation). */
-export const previewSizeFor = (design: Pick<Design, 'device' | 'orientation'>): ExportSize => {
-  const d = getDevice(design.device);
-  return orientationOf(design) === 'landscape' ? d.landscapePreviewSize : d.previewSize;
+/**
+ * Size preset for a design made before presets existed: the closest preset to what it rendered
+ * at (its device's old preview size), so it keeps looking exactly the same.
+ */
+export const legacySizeId = (store: Store, device: DeviceId): string => {
+  const old = getDevice(device).previewSize;
+  return closestPreset(store, device, old.width, old.height).id;
+};
+
+/** The size a design is edited and previewed at: its preset, in its orientation. */
+export const previewSizeFor = (design: Pick<Design, 'device' | 'orientation' | 'sizeId' | 'store'>): ExportSize => {
+  const preset = getPreset(design.sizeId) ?? getPreset(legacySizeId(design.store ?? 'ios', design.device))!;
+  return presetSize(preset, orientationOf(design));
+};
+
+/** Device + size for a store's default (new projects, switching store). */
+export const storeDefaults = (store: Store): Pick<Design, 'device' | 'sizeId'> => {
+  const preset = getPreset(DEFAULT_PRESET[store])!;
+  return { sizeId: preset.id, device: groupOf(preset).device ?? defaultDeviceForStore(store) };
 };
 export const devicesForStore = (store: Store) => DEVICES.filter((d) => d.store === store);
 export const defaultDeviceForStore = (store: Store): DeviceId => (store === 'ios' ? 'iphone' : 'pixel');
@@ -90,12 +107,13 @@ export const isRtl = (code: string) => RTL_LOCALES.includes(code.split('-')[0].t
 export const languageLabel = (code: string) => LANGUAGES.find((l) => l.code === code)?.label ?? code;
 
 /** Features that need a paid plan. */
-export const PLAN_FEATURES: Record<'angle3d' | 'localization' | 'customFonts' | 'userTemplates' | 'autoTranslate', Plan[]> = {
-  angle3d: ['standard', 'extended'],
-  localization: ['standard', 'extended'],
-  customFonts: ['standard', 'extended'],
-  userTemplates: ['standard', 'extended'],
-  autoTranslate: ['standard', 'extended'],
+/** Which plans include each paid feature — derived from the shared plan config. */
+export const PLAN_FEATURES: Record<Feature, Plan[]> = {
+  angle3d: plansWith('angle3d'),
+  localization: plansWith('localization'),
+  customFonts: plansWith('customFonts'),
+  userTemplates: plansWith('userTemplates'),
+  autoTranslate: plansWith('autoTranslate'),
 };
 
 const CUSTOM_FONT_PREFIX = 'custom:';
@@ -198,7 +216,14 @@ export const createDefaultDesign = (overrides: Partial<Design> = {}): Design => 
   activeLocale: 'en',
   slides: SAMPLE_COPY.map(([h, s]) => makeSlide(h, s)),
   ...overrides,
+  sizeId: overrides.sizeId ?? defaultSizeIdFor(overrides.store ?? 'ios', overrides.device),
 });
+
+/** New designs start on the store's required size, unless an explicit device needs another one. */
+function defaultSizeIdFor(store: Store, device: DeviceId | undefined): string {
+  const def = storeDefaults(store);
+  return !device || device === def.device ? def.sizeId! : legacySizeId(store, device);
+}
 
 /** Used when Supabase is not configured, and as a fallback if the fetch fails. */
 export const FALLBACK_TEMPLATES: Template[] = [

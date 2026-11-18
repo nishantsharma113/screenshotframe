@@ -325,3 +325,51 @@ Storage cleanup *(Supabase, signed in, after `0003_rls_fixes.sql`)*. Keep the da
 
 **Open:** the feature graphic's headline isn't auto-translated, only the slides.
 
+## 22. Billing and plan limits *(Razorpay test mode; README §5)*
+
+- [ ] Pricing (`/#pricing`): Basic is Free; Standard and Extended show your Razorpay test-plan prices (monthly and yearly). API access and Client work license say **Coming soon**. "Real device frames" says portrait or landscape.
+- [ ] Signed out, **Choose Standard** → sign-up → after signing in you land on Billing with Standard highlighted.
+- [ ] Billing (header → **Billing**): "You're on Basic (free)", no invoices. Subscribe → Razorpay Checkout (test) → pay → "Welcome to Standard". The plan shows a renewal date; Supabase `profiles` has `plan_status = active`.
+- [ ] Close Checkout without paying → nothing changes.
+- [ ] Within a minute the webhook adds an invoice row; **View** opens Razorpay's receipt.
+- [ ] **Upgrade to Extended** → applies at once (3D angles etc. still unlocked). Then **Switch at renewal** to Standard → the card says "Starts at renewal", and Extended stays until the date.
+- [ ] **Cancel subscription** → "you keep … until <date>, then move to Basic". Paid features keep working until then.
+- [ ] Simulate period end: in SQL set `plan_renews_at = now() - interval '1 minute'` on a cancelled profile → reload → Basic.
+- [ ] Failed payment (Razorpay test failure method, or send a signed `subscription.pending` webhook) → `past_due`, plan kept; `subscription.halted` → Basic.
+- [ ] Webhook with a wrong signature → 401; the same event id twice → processed once (`billing_events`).
+- [ ] Basic with 3 projects: My projects shows "3 of 3 projects on Basic"; **New project** shows the upgrade prompt. Trying anyway (e.g. `/editor/new`) → "Your plan includes 3 projects" + **See plans**. The 4th insert is refused by the database even through the API.
+- [ ] Basic can't save templates or upload fonts, even through the API (RLS).
+- [ ] Another user can't read your invoices or billing columns. `rls_test.sql` → **All RLS checks passed**.
+- [ ] `deno test --allow-read supabase/functions/` passes.
+
+**Open:** resubscribing while a cancelled period is still running starts the new subscription right away (no credit for the remaining days).
+**Open:** Razorpay doesn't allow plan changes on some UPI-mandate subscriptions; the Billing page then shows Razorpay's error. Cancel and subscribe again instead.
+
+## 23. Store size presets and export
+
+- [ ] New project: **Size** shows "iPhone · Dynamic Island, medium · 1206 × 2622 · Required". The canvas header shows the same.
+- [ ] The picker lists 9 iPhone/iPad groups (18 sizes) with badges: **Required**, **Required for iPad apps** (iPad 13"), **Required from Apr 2027** (iPhone Duo).
+- [ ] Pick iPad 11", iPhone 5.5", Duo outer/inner → the slide shape changes, the frame switches iPhone ↔ iPad, and text and device stay inside the slide. Undo returns to the previous size.
+- [ ] **Landscape** swaps the size (e.g. 2622 × 1206).
+- [ ] Switch to Google Play → Phone 1080 × 1920 (Required); the picker lists Phone, 7" and 10" tablet.
+- [ ] An existing project opens at the size it had before and looks the same (iPhone → 6.9" 1320 × 2868; iPad → 13" 2064 × 2752; Pixel → phone 1080 × 1920). An old Android tablet project moves to 1600 × 2560.
+- [ ] Export: the sizes are grouped with the same badges; the current size and the store's required sizes are ticked; the image count is right.
+- [ ] Google Play with 1 slide → "needs at least 2"; with 9 → "accepts at most 8". The App Store never warns for 1–10.
+- [ ] The app icon sizes are disabled until an icon is uploaded (feature graphic panel).
+- [ ] Tick several sizes, download → the folders are `ios/<device>/<locale>/NN.png` and `android/<device>/<locale>/NN.png`; landscape folders end in `-landscape`.
+- [ ] `node scripts/check-export.mjs <zip>` prints **OK**: exact sizes, PNG colour type 2 (24-bit, no alpha), Play ≤ 8 MB and 320–3840 px, counts within the rules.
+- [ ] Open a PNG in an image editor or `file`: "8-bit/color RGB" (no alpha).
+- [ ] Upload one PNG per store to App Store Connect / Play Console test listings → accepted.
+
+## 24. App icon generator (`/icon`)
+
+- [ ] Header → **Icon generator** opens `/icon` while signed out; **Download** is disabled until an image is chosen.
+- [ ] A text file or a file over 20 MB → a clear error.
+- [ ] Upload a 1024² PNG with transparency → the iOS, Android circle/squircle and Google Play previews appear; the info line says "has transparency".
+- [ ] Change the background colour and the Android artwork size → the previews update.
+- [ ] Download → the ZIP has `ios/AppIcon.appiconset` (13 PNGs + `Contents.json`, 18 entries), `android/res/mipmap-{mdpi…xxxhdpi}` (3 PNGs each), `mipmap-anydpi-v26/*.xml`, `values/ic_launcher_background.xml`, `playstore-icon.png` and `README.txt`.
+- [ ] iOS PNGs are exactly size × scale px and have no alpha (`file Icon-1024.png` → RGB); transparent areas are your background colour.
+- [ ] Drag `AppIcon.appiconset` into an Xcode project's Assets → no warnings; the app shows the icon on a simulator.
+- [ ] Copy `android/res/*` into an Android Studio project → the build succeeds; the adaptive icon shows on an Android 8+ emulator, and the round icon on a round-icon launcher.
+- [ ] An 800 × 600 image → cropped to the centre square, with "cropped" and "1024 or larger looks sharper" warnings.
+
