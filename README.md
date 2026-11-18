@@ -92,6 +92,19 @@ copied to `screenshots/<user_id>/templates/<template_id>/`, and copied again int
 from the template, so deleting a project or a template never breaks another. Find them at
 **/templates → My templates**.
 
+**App icon generator** (`/icon`, no project or sign-in needed). Upload one square image (1024 × 1024 or
+larger) and download a ZIP with:
+
+- **iOS:** `AppIcon.appiconset` with every iPhone, iPad and App Store size and `Contents.json`, ready to
+  drop into Xcode. Icons are square and opaque; transparency is filled with your background colour.
+- **Android:** `res/mipmap-mdpi … xxxhdpi` with `ic_launcher`, `ic_launcher_round` and the adaptive
+  `ic_launcher_foreground` layer, plus `mipmap-anydpi-v26/*.xml` and the background colour resource, to
+  copy into `app/src/main/res/`.
+- **Google Play:** `playstore-icon.png` (512 × 512).
+
+Sizes are listed in `src/config/iconSizes.ts`. Downscaling is done in halving steps, so small icons
+(20–40 px) stay sharp.
+
 **Store sizes.** Every App Store and Google Play size lives in one file,
 `src/config/storeSizes.ts`: store, device group, name, portrait width × height, and whether it's
 required. The editor's **Size** picker, the export dialog, the ZIP folders and the slide-count

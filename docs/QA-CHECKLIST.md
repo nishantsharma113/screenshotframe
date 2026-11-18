@@ -361,3 +361,15 @@ Storage cleanup *(Supabase, signed in, after `0003_rls_fixes.sql`)*. Keep the da
 - [ ] Open a PNG in an image editor or `file`: "8-bit/color RGB" (no alpha).
 - [ ] Upload one PNG per store to App Store Connect / Play Console test listings → accepted.
 
+## 24. App icon generator (`/icon`)
+
+- [ ] Header → **Icon generator** opens `/icon` while signed out; **Download** is disabled until an image is chosen.
+- [ ] A text file or a file over 20 MB → a clear error.
+- [ ] Upload a 1024² PNG with transparency → the iOS, Android circle/squircle and Google Play previews appear; the info line says "has transparency".
+- [ ] Change the background colour and the Android artwork size → the previews update.
+- [ ] Download → the ZIP has `ios/AppIcon.appiconset` (13 PNGs + `Contents.json`, 18 entries), `android/res/mipmap-{mdpi…xxxhdpi}` (3 PNGs each), `mipmap-anydpi-v26/*.xml`, `values/ic_launcher_background.xml`, `playstore-icon.png` and `README.txt`.
+- [ ] iOS PNGs are exactly size × scale px and have no alpha (`file Icon-1024.png` → RGB); transparent areas are your background colour.
+- [ ] Drag `AppIcon.appiconset` into an Xcode project's Assets → no warnings; the app shows the icon on a simulator.
+- [ ] Copy `android/res/*` into an Android Studio project → the build succeeds; the adaptive icon shows on an Android 8+ emulator, and the round icon on a round-icon launcher.
+- [ ] An 800 × 600 image → cropped to the centre square, with "cropped" and "1024 or larger looks sharper" warnings.
+

@@ -14,6 +14,7 @@ export function SiteHeader() {
         <nav aria-label="Main" className="site-nav">
           <a href={`${import.meta.env.BASE_URL}#features`}>Features</a>
           <Link to="/templates">Templates</Link>
+          <Link to="/icon">Icon generator</Link>
           <a href={`${import.meta.env.BASE_URL}#pricing`}>Pricing</a>
           <a href={`${import.meta.env.BASE_URL}#faq`}>FAQ</a>
         </nav>
