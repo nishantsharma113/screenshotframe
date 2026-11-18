@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { SlideView } from '@/components/SlideView';
 import { useAuth } from '@/hooks/useAuth';
 import { previewSizeFor } from '@/lib/constants';
@@ -11,6 +12,7 @@ import { deleteUserTemplate, listUserTemplates, type UserTemplate } from '@/serv
 export function MyTemplates() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [templates, setTemplates] = useState<UserTemplate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -49,7 +51,13 @@ export function MyTemplates() {
 
   const remove = async (t: UserTemplate) => {
     if (deleting) return;
-    if (!window.confirm(`Delete the template “${t.name}”? Projects made from it are not affected.`)) return;
+    const ok = await confirm({
+      title: `Delete template “${t.name}”?`,
+      message: 'Projects you made from it keep their design.',
+      confirmLabel: 'Delete template',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setDeleting(t.id);
     setError(null);
     try {

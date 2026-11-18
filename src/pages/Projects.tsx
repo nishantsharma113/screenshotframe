@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { PLANS } from '@shared/plans';
 import { BILLING_ENABLED } from '@/config/features';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SlideView } from '@/components/SlideView';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +15,7 @@ import { deleteProjectFolder } from '@/services/storage';
 export function Projects() {
   const { user, loading, plan } = useAuth();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,13 @@ export function Projects() {
 
   const remove = async (p: Project) => {
     if (deleting) return;
-    if (!window.confirm(`Delete “${p.name}”? This can’t be undone.`)) return;
+    const ok = await confirm({
+      title: `Delete “${p.name}”?`,
+      message: 'The project and its uploaded screenshots are deleted for good. This can’t be undone.',
+      confirmLabel: 'Delete project',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setDeleting(p.id);
     setError(null);
     try {

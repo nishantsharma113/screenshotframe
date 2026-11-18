@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icon } from '@/components/Icon';
 import { MyTemplates } from '@/components/MyTemplates';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { SiteHeader } from '@/components/SiteHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { readableTextColor } from '@/lib/constants';
@@ -23,6 +24,7 @@ export function Templates() {
   const [query, setQuery] = useState('');
   const { user } = useAuth();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   // ?tab=mine opens "My templates" (linkable, survives refresh).
   const [search, setSearch] = useSearchParams();
   const tab = search.get('tab') === 'mine' ? 'mine' : 'all';
@@ -42,9 +44,15 @@ export function Templates() {
     );
   }, [templates, category, store, query]);
 
-  const pickTemplate = (t: Template) => {
+  const pickTemplate = async (t: Template) => {
     if (!user && loadLocalProject()) {
-      const ok = window.confirm('This replaces the project saved in this browser. Sign in to keep several projects. Continue?');
+      const ok = await confirm({
+        title: 'Replace your current project?',
+        message: 'Using a template replaces the project saved in this browser. Sign in to keep several projects.',
+        confirmLabel: 'Use template',
+        cancelLabel: 'Keep my project',
+        tone: 'danger',
+      });
       if (!ok) return;
     }
     navigate(`/editor/new?template=${encodeURIComponent(t.id)}`);
@@ -136,7 +144,7 @@ export function Templates() {
                               {t.category} · {t.store === 'both' ? 'iOS and Android' : t.store === 'ios' ? 'App Store' : 'Google Play'}
                             </p>
                           </div>
-                          <button type="button" className="btn btn--outline" onClick={() => pickTemplate(t)}>
+                          <button type="button" className="btn btn--outline" onClick={() => void pickTemplate(t)}>
                             Use
                           </button>
                         </div>

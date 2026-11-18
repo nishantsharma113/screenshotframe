@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { PAID_PLANS, PLANS, isInterval, isPaidPlan, planRank, type BillingInterval, type PaidPlanId } from '@shared/plans';
+import { useConfirm } from '@/components/ConfirmDialog';
 import { SiteHeader } from '@/components/SiteHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -24,6 +25,7 @@ const LIVE = ['active', 'past_due'];
 export function Billing() {
   const { user, plan: effectivePlan, loading, refreshPlan } = useAuth();
   const [search] = useSearchParams();
+  const confirm = useConfirm();
   const [interval, setInterval] = useState<BillingInterval>(isInterval(search.get('interval')) ? (search.get('interval') as BillingInterval) : 'monthly');
   const highlight = isPaidPlan(search.get('plan')) ? (search.get('plan') as PaidPlanId) : null;
   const [info, setInfo] = useState<BillingInfo | null>(null);
@@ -97,8 +99,15 @@ export function Billing() {
         : `You’ll switch to ${PLANS[p].name} (${interval}) on ${date(info?.plan_renews_at ?? null)}. Until then nothing changes.`;
     });
 
-  const cancel = () => {
-    if (!window.confirm(`Cancel your subscription? You keep ${PLANS[currentPaid!].name} until ${date(info?.plan_renews_at ?? null)}, then move to Basic.`)) return;
+  const cancel = async () => {
+    const ok = await confirm({
+      title: 'Cancel your subscription?',
+      message: `You keep ${PLANS[currentPaid!].name} until ${date(info?.plan_renews_at ?? null)}, then move to Basic.`,
+      confirmLabel: 'Cancel subscription',
+      cancelLabel: 'Keep subscription',
+      tone: 'danger',
+    });
+    if (!ok) return;
     void run('cancel', async () => {
       const r = await cancelSubscription();
       return `Cancelled. You keep your plan until ${date(r.accessUntil)}, then move to Basic.`;
@@ -131,7 +140,7 @@ export function Billing() {
           <h2>{PLANS[effectivePlan]?.name ?? 'Basic'}</h2>
           {status && <p>{status}</p>}
           {currentPaid && !cancelling && (
-            <button type="button" className="btn btn--outline" disabled={busy !== null} onClick={cancel}>
+            <button type="button" className="btn btn--outline" disabled={busy !== null} onClick={() => void cancel()}>
               {busy === 'cancel' ? 'Cancelling…' : 'Cancel subscription'}
             </button>
           )}
