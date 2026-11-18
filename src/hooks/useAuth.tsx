@@ -44,6 +44,9 @@ function requireAuthClient() {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+/** Longest the app waits for the saved session before continuing as signed out. */
+const AUTH_WAIT_MS = 3000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [plan, setPlan] = useState<Plan>('basic');
@@ -53,14 +56,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) return;
-    // finally: a failed session check (offline) must not leave every page stuck on "loading".
+    // With an expired saved session and Supabase unreachable (offline, or a network that blocks
+    // supabase.co), getSession() keeps retrying the token refresh for ~25 s. Don't hold the app on
+    // "Opening your project…" for that: after AUTH_WAIT_MS carry on as signed out (browser-only
+    // projects work), and pick the session up if it arrives later.
+    const done = () => setLoading(false);
+    const timer = window.setTimeout(done, AUTH_WAIT_MS);
     supabase.auth
       .getSession()
       .then(({ data }) => setSession(data.session))
       .catch(() => setSession(null))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        window.clearTimeout(timer);
+        done();
+      });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      window.clearTimeout(timer);
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   /** Whose plan is currently in state, so a refresh doesn't flash Basic for the same user. */
