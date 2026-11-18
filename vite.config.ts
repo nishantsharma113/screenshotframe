@@ -8,6 +8,10 @@ export default defineConfig({
   base: process.env.BASE_PATH || '/',
   plugins: [react()],
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Plan config shared with the Edge Functions (one source of truth).
+      '@shared': fileURLToPath(new URL('./supabase/functions/_shared', import.meta.url)),
+    },
   },
 });

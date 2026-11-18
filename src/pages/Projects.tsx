@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { PLANS } from '@shared/plans';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SlideView } from '@/components/SlideView';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,7 +11,9 @@ import { ensureDesignFonts } from '@/services/fonts';
 import { deleteProjectFolder } from '@/services/storage';
 
 export function Projects() {
-  const { user, loading } = useAuth();
+  const { user, loading, plan } = useAuth();
+  const navigate = useNavigate();
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -35,6 +38,10 @@ export function Projects() {
   }, [userId]);
 
   if (!loading && !user) return <Navigate to="/signin" replace />;
+
+  // The server enforces this too (0007_billing.sql); checking here just avoids a dead end.
+  const limit = PLANS[plan].limits.projects;
+  const atLimit = limit !== null && (projects?.length ?? 0) >= limit;
 
   const remove = async (p: Project) => {
     if (deleting) return;
@@ -68,11 +75,29 @@ export function Projects() {
       <SiteHeader />
       <main className="container section">
         <div className="projects__head">
-          <h1 className="page-title">My projects</h1>
-          <Link to="/editor/new" className="btn btn--primary">
+          <div>
+            <h1 className="page-title">My projects</h1>
+            {limit !== null && projects && (
+              <p className="muted small">
+                {projects.length} of {limit} projects on {PLANS[plan].name}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => (atLimit ? setShowUpgrade(true) : navigate('/editor/new'))}
+          >
             New project
-          </Link>
+          </button>
         </div>
+
+        {showUpgrade && (
+          <div className="banner banner--light" role="status">
+            {PLANS[plan].name} includes {limit} projects. <Link to="/account/billing">Upgrade</Link> for unlimited projects, or
+            delete one you no longer need.
+          </div>
+        )}
 
         {error && (
           <p className="error-text" role="alert">

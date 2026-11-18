@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { plansWith, type Feature } from '@shared/plans';
 import type { Backdrop, Design, DeviceId, DeviceSpec, ExportSize, Orientation, Plan, SlideData, Store, Template } from './types';
 
 /**
@@ -90,12 +91,13 @@ export const isRtl = (code: string) => RTL_LOCALES.includes(code.split('-')[0].t
 export const languageLabel = (code: string) => LANGUAGES.find((l) => l.code === code)?.label ?? code;
 
 /** Features that need a paid plan. */
-export const PLAN_FEATURES: Record<'angle3d' | 'localization' | 'customFonts' | 'userTemplates' | 'autoTranslate', Plan[]> = {
-  angle3d: ['standard', 'extended'],
-  localization: ['standard', 'extended'],
-  customFonts: ['standard', 'extended'],
-  userTemplates: ['standard', 'extended'],
-  autoTranslate: ['standard', 'extended'],
+/** Which plans include each paid feature — derived from the shared plan config. */
+export const PLAN_FEATURES: Record<Feature, Plan[]> = {
+  angle3d: plansWith('angle3d'),
+  localization: plansWith('localization'),
+  customFonts: plansWith('customFonts'),
+  userTemplates: plansWith('userTemplates'),
+  autoTranslate: plansWith('autoTranslate'),
 };
 
 const CUSTOM_FONT_PREFIX = 'custom:';

@@ -325,3 +325,23 @@ Storage cleanup *(Supabase, signed in, after `0003_rls_fixes.sql`)*. Keep the da
 
 **Open:** the feature graphic's headline isn't auto-translated, only the slides.
 
+## 22. Billing and plan limits *(Razorpay test mode; README §5)*
+
+- [ ] Pricing (`/#pricing`): Basic is Free; Standard and Extended show your Razorpay test-plan prices (monthly and yearly). API access and Client work license say **Coming soon**. "Real device frames" says portrait or landscape.
+- [ ] Signed out, **Choose Standard** → sign-up → after signing in you land on Billing with Standard highlighted.
+- [ ] Billing (header → **Billing**): "You're on Basic (free)", no invoices. Subscribe → Razorpay Checkout (test) → pay → "Welcome to Standard". The plan shows a renewal date; Supabase `profiles` has `plan_status = active`.
+- [ ] Close Checkout without paying → nothing changes.
+- [ ] Within a minute the webhook adds an invoice row; **View** opens Razorpay's receipt.
+- [ ] **Upgrade to Extended** → applies at once (3D angles etc. still unlocked). Then **Switch at renewal** to Standard → the card says "Starts at renewal", and Extended stays until the date.
+- [ ] **Cancel subscription** → "you keep … until <date>, then move to Basic". Paid features keep working until then.
+- [ ] Simulate period end: in SQL set `plan_renews_at = now() - interval '1 minute'` on a cancelled profile → reload → Basic.
+- [ ] Failed payment (Razorpay test failure method, or send a signed `subscription.pending` webhook) → `past_due`, plan kept; `subscription.halted` → Basic.
+- [ ] Webhook with a wrong signature → 401; the same event id twice → processed once (`billing_events`).
+- [ ] Basic with 3 projects: My projects shows "3 of 3 projects on Basic"; **New project** shows the upgrade prompt. Trying anyway (e.g. `/editor/new`) → "Your plan includes 3 projects" + **See plans**. The 4th insert is refused by the database even through the API.
+- [ ] Basic can't save templates or upload fonts, even through the API (RLS).
+- [ ] Another user can't read your invoices or billing columns. `rls_test.sql` → **All RLS checks passed**.
+- [ ] `deno test --allow-read supabase/functions/` passes.
+
+**Open:** resubscribing while a cancelled period is still running starts the new subscription right away (no credit for the remaining days).
+**Open:** Razorpay doesn't allow plan changes on some UPI-mandate subscriptions; the Billing page then shows Razorpay's error. Cancel and subscribe again instead.
+

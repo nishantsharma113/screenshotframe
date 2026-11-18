@@ -41,6 +41,8 @@ declare
   font_row_b     uuid;
   has_tpl        boolean;   -- 0005_user_templates.sql installed?
   has_quota      boolean;   -- 0006_translate_usage.sql installed?
+  has_billing    boolean;   -- 0007_billing.sql installed?
+  a_plan         text := 'basic';
   left_today     int;
   tpl_b          uuid;
 begin
@@ -80,6 +82,13 @@ begin
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'profiles' and column_name = 'is_admin');
   has_make_admin := to_regprocedure('public.make_admin(text)') is not null;
+  has_billing := to_regprocedure('public.my_plan()') is not null and to_regclass('public.invoices') is not null;
+  if has_billing then
+    a_plan := 'standard';
+    update public.profiles set plan = 'standard' where id = uid_a;     -- plan_status 'none' = set by hand
+    insert into public.invoices (id, user_id, amount, currency) values ('pay_b_' || tag, uid_b, 49900, 'INR');
+    insert into public.billing_events (id, event, payload) values ('evt_' || tag, 'subscription.charged', '{}');
+  end if;
   has_quota := to_regclass('public.translate_usage') is not null
                and to_regprocedure('public.consume_translate_quota()') is not null;
   if has_quota then
@@ -314,6 +323,65 @@ begin
   delete from storage.objects;                                             -- 6b. storage DELETE policy
   delete from public.projects;                                             -- 3b. DELETE policy (removes A's own project too)
 
+  -- 12. Billing (0007_billing.sql)
+  if has_billing then
+    if public.my_plan() <> 'standard' then raise exception 'FAIL: my_plan() should be standard for A (control)'; end if;
+    begin
+      perform public.current_plan(uid_b);
+      raise exception 'FAIL: a user can look up another user''s plan with current_plan(uuid)';
+    exception when insufficient_privilege then null;
+    end;
+    update public.profiles set plan_status = 'active', plan_renews_at = now() + interval '10 years', cancel_at_period_end = false;
+    get diagnostics n = row_count;
+    if n <> 0 then raise exception 'FAIL: a user can write their own billing columns'; end if;
+    select count(*) into n from public.invoices where user_id = uid_b;
+    if n <> 0 then raise exception 'FAIL: user A can read user B''s invoices'; end if;
+    begin
+      insert into public.invoices (id, user_id, amount, currency) values ('fake_' || tag, uid_a, 1, 'INR');
+      raise exception 'FAIL: a user can insert invoices';
+    exception when insufficient_privilege then null;
+    end;
+    select count(*) into n from public.billing_events;
+    if n <> 0 then raise exception 'FAIL: users can read webhook events'; end if;
+    begin
+      insert into public.billing_events (id, event, payload) values ('evt_fake_' || tag, 'x', '{}');
+      raise exception 'FAIL: users can insert webhook events';
+    exception when insufficient_privilege then null;
+    end;
+
+    -- As B (Basic, 1 project so far): 2 more fit, the 4th is refused by the server.
+    perform set_config('request.jwt.claim.sub', uid_b::text, true);
+    perform set_config('request.jwt.claims', json_build_object('sub', uid_b, 'role', 'authenticated')::text, true);
+    if public.my_plan() <> 'basic' then raise exception 'FAIL: my_plan() should be basic for B'; end if;
+    insert into public.projects (user_id, name, design) values (uid_b, 'B2', '{}');
+    insert into public.projects (user_id, name, design) values (uid_b, 'B3', '{}');
+    begin
+      insert into public.projects (user_id, name, design) values (uid_b, 'B4', '{}');
+      raise exception 'FAIL: a Basic user created a 4th project';
+    exception when raise_exception then
+      if sqlerrm not like 'PLAN_LIMIT_PROJECTS%' then raise; end if;
+    end;
+    if has_tpl then
+      begin
+        insert into public.user_templates (user_id, name, design) values (uid_b, 'basic tpl', '{}');
+        raise exception 'FAIL: a Basic user saved a template';
+      exception when insufficient_privilege then null;
+      end;
+    end if;
+    if has_fonts then
+      begin
+        insert into public.user_fonts (user_id, family, path) values (uid_b, 'basic font', uid_b::text || '/f.ttf');
+        raise exception 'FAIL: a Basic user added a font';
+      exception when insufficient_privilege then null;
+      end;
+      begin
+        insert into storage.objects (bucket_id, name, owner) values ('fonts', uid_b::text || '/f.ttf', uid_b);
+        raise exception 'FAIL: a Basic user uploaded a font file';
+      exception when insufficient_privilege then null;
+      end;
+    end if;
+  end if;
+
   -- ── Act as a signed-out visitor (anon) ────────────────────
   reset role;
   perform set_config('role', 'anon', true);
@@ -398,7 +466,7 @@ begin
   if exists (select 1 from public.projects where id = proj_a) then
     raise exception 'FAIL: user A could not delete their own project (control check)';
   end if;
-  if exists (select 1 from public.profiles where id = uid_a and plan <> 'basic') then
+  if exists (select 1 from public.profiles where id = uid_a and plan <> a_plan) then
     raise exception 'FAIL: user A''s plan changed';
   end if;
   if not exists (select 1 from storage.objects where bucket_id = 'screenshots' and name = file_b) then
@@ -444,8 +512,47 @@ begin
     end if;
   end if;
 
+  if has_billing then
+    if (select count(*) from public.projects where user_id = uid_b) <> 3 then
+      raise exception 'FAIL: user B should have exactly 3 projects';
+    end if;
+    -- current_plan() for each billing state (B's profile, as the service role would set it)
+    declare
+      st record;
+    begin
+      for st in
+        select * from (values
+          ('standard', 'none',      null::interval,      'standard', 'set by hand'),
+          ('standard', 'active',    interval '20 days',  'standard', 'active'),
+          ('standard', 'past_due',  interval '-1 day',   'standard', 'payment failed, inside the 3-day grace'),
+          ('standard', 'past_due',  interval '-5 days',  'basic',    'payment failed, grace over'),
+          ('extended', 'cancelled', interval '10 days',  'extended', 'cancelled, paid period still running'),
+          ('extended', 'cancelled', interval '-1 minute','basic',    'cancelled, period over'),
+          ('standard', 'halted',    interval '10 days',  'basic',    'all retries failed'),
+          ('standard', 'expired',   interval '10 days',  'basic',    'subscription completed'),
+          ('basic',    'active',    interval '10 days',  'basic',    'basic plan')
+        ) v(plan, status, renews, expect, label)
+      loop
+        update public.profiles
+           set plan = st.plan, plan_status = st.status,
+               plan_renews_at = case when st.renews is null then null else now() + st.renews end
+         where id = uid_b;
+        if public.current_plan(uid_b) <> st.expect then
+          raise exception 'FAIL: current_plan for "%": expected %, got %', st.label, st.expect, public.current_plan(uid_b);
+        end if;
+      end loop;
+      update public.profiles set plan = 'basic', plan_status = 'cancelled', plan_renews_at = now() - interval '1 day', is_admin = true where id = uid_b;
+      if public.current_plan(uid_b) <> 'extended' then raise exception 'FAIL: admins should always get extended'; end if;
+    exception when undefined_column then
+      null; -- is_admin (0002) not installed
+    end;
+  end if;
+
   delete from storage.objects
    where bucket_id in ('screenshots', 'fonts') and (name like uid_a::text || '/%' or name like uid_b::text || '/%');
+  if has_billing then
+    delete from public.billing_events where id = 'evt_' || tag;
+  end if;
   delete from auth.users where id in (uid_a, uid_b); -- cascades to profiles and projects
 
   if exists (select 1 from public.profiles where id in (uid_a, uid_b))

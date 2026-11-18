@@ -21,8 +21,7 @@ Without `.env.local` the app still runs: the project is saved in the browser
    This creates `profiles`, `projects`, `templates` (with 8 seed templates),
    the public `screenshots` storage bucket, and all Row Level Security policies.
    (With the Supabase CLI: `supabase link` then `supabase db push`.)
-   Then run `0002_admin.sql`, `0003_rls_fixes.sql`, `0004_fonts.sql`, `0005_user_templates.sql` and
-   `0006_translate_usage.sql` the same way, in order.
+   Then run `0002_admin.sql` … `0007_billing.sql` the same way, in order.
    To check the security rules, paste `supabase/tests/rls_test.sql` into the SQL Editor
    and run it. It ends with **All RLS checks passed**, or stops with a `FAIL: …` message.
    The test creates two throwaway users and always cleans them up.
@@ -117,8 +116,8 @@ in the browser, which is limited to a few MB — the editor warns when it’s fu
 
 `profiles.plan` is `basic`, `standard` or `extended`. 3D angles, adding
 languages, uploading fonts, saving templates and auto-translate need `standard` or above (see `PLAN_FEATURES` in `constants.ts`).
-Clients can’t change their own plan (no update policy). Until billing is added,
-set it by hand:
+Clients can’t change their own plan (no update policy). Plans are bought through Razorpay
+(see **Billing** below). You can still set one by hand, for example for testing or a comped account:
 
 ```sql
 update public.profiles set plan = 'standard' where email = 'you@example.com';
@@ -141,9 +140,66 @@ Run `supabase/migrations/0002_admin.sql` once (SQL Editor → paste → Run). Th
 Admins always get `extended`, even if their `plan` column says something else. These functions
 can't be called from the browser; they are revoked for `anon` and `authenticated`.
 
-Prices on the landing page are `[YOUR PRICE]` placeholders in `src/pages/Landing.tsx`.
 
-## 5. Auto-translate (Edge Function)
+## 5. Billing (Razorpay)
+
+Standard and Extended are sold as monthly or yearly **Razorpay Subscriptions**.
+
+- **Plans:** names, features and limits are in `supabase/functions/_shared/plans.ts`. The pricing page,
+  the editor's feature gates, checkout and the Billing page all read it.
+- **Prices:** read live from your Razorpay plans, so the pricing page always matches checkout.
+- **Limits:** enforced by the database (`0007_billing.sql`). Basic is capped at 3 projects; the cap is
+  checked per user under a lock, so parallel requests can't get past it. Saving templates and uploading
+  fonts also need a paid plan.
+- **Who sets the plan:** only server code. The `billing-webhook` function verifies Razorpay's signature;
+  the `billing` function verifies the checkout signature and re-reads the subscription from Razorpay.
+  The browser never sets a plan.
+
+| Event | Result |
+|---|---|
+| Payment succeeds | Plan active; `plan_renews_at` = end of the paid period; invoice recorded |
+| Renewal charged | `plan_renews_at` moves forward; invoice recorded |
+| Upgrade (or monthly → yearly) | Applies immediately |
+| Downgrade (or yearly → monthly) | Scheduled for the next renewal; the current plan continues until then |
+| Payment fails | `past_due`: plan kept while Razorpay retries (until 3 days past the period end) |
+| All retries fail | `halted`: back to Basic |
+| Cancel | Access continues until `plan_renews_at`, then Basic |
+
+`public.current_plan()` decides what a user has right now, so access ends on time even if a webhook is late.
+
+**Set up, in Razorpay test mode first:**
+
+1. Razorpay Dashboard (Test Mode) → **Subscriptions → Plans**: create 4 plans: Standard monthly and
+   yearly, Extended monthly and yearly. Note each `plan_…` id.
+2. **Settings → API Keys**: generate a test key (`rzp_test_…` and its secret).
+3. Run `supabase/migrations/0007_billing.sql`, then deploy:
+
+   ```bash
+   supabase secrets set \
+     RAZORPAY_KEY_ID=rzp_test_xxx RAZORPAY_KEY_SECRET=xxx RAZORPAY_WEBHOOK_SECRET=choose-a-long-random-string \
+     RAZORPAY_PLAN_STANDARD_MONTHLY=plan_xxx RAZORPAY_PLAN_STANDARD_YEARLY=plan_xxx \
+     RAZORPAY_PLAN_EXTENDED_MONTHLY=plan_xxx RAZORPAY_PLAN_EXTENDED_YEARLY=plan_xxx
+
+   # Both verify callers themselves: billing checks the user's JWT (its price list is public);
+   # billing-webhook checks Razorpay's HMAC signature.
+   supabase functions deploy billing --no-verify-jwt
+   supabase functions deploy billing-webhook --no-verify-jwt
+   ```
+4. **Settings → Webhooks → Add**:
+   - **URL:** `https://YOUR-PROJECT-REF.supabase.co/functions/v1/billing-webhook`
+   - **Secret:** the same `RAZORPAY_WEBHOOK_SECRET`
+   - **Events:** `subscription.authenticated`, `.activated`, `.charged`, `.pending`, `.halted`,
+     `.cancelled`, `.completed`, `.updated`, `.paused`, `.resumed`
+5. Pay with Razorpay's test cards or UPI (see Razorpay's "Test card details" docs). To go live, repeat
+   steps 1, 2 and 4 in Live Mode and set the live secrets.
+
+Keys stay in Supabase secrets; the app only ever gets the public key id (`rzp_…`) from the function.
+
+Tests: `deno test --allow-read supabase/functions/` covers signature checks, duplicate and out-of-order
+webhooks, upgrade, downgrade, cancel, failed payment and renewal. `supabase/tests/rls_test.sql` covers
+the project cap, billing-data RLS and `current_plan()` for every state.
+
+## 5b. Auto-translate (Edge Function)
 
 In the editor, after you add a language, the right panel shows **Auto-translate to …**. It calls the
 `translate` Edge Function (`supabase/functions/translate/`). The function:
@@ -206,7 +262,6 @@ Add the production URL to Supabase’s redirect URLs.
 
 ## Not built yet (good next steps)
 
-- **Billing** — e.g. Razorpay/Stripe checkout + a Supabase Edge Function webhook that updates `profiles.plan` with the service-role key.
 - **Free-form drag-and-drop** of text and devices (current layout is “text on top / below”).
 - Deleting or renaming uploaded fonts (upload is built).
 - **Public API** for CI/CD screenshot generation (would need server-side rendering, e.g. Playwright in a worker).

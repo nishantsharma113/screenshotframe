@@ -29,6 +29,9 @@ export function SiteHeader() {
                 <Link to="/projects" className="btn btn--ghost">
                   My projects
                 </Link>
+                <Link to="/account/billing" className="btn btn--ghost">
+                  Billing
+                </Link>
                 <button type="button" className="btn btn--ghost" onClick={() => void signOut()}>
                   Sign out
                 </button>
