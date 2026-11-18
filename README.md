@@ -169,9 +169,17 @@ Standard and Extended are sold as monthly or yearly **Razorpay Subscriptions**.
 
 **Set up, in Razorpay test mode first:**
 
-1. Razorpay Dashboard (Test Mode) → **Subscriptions → Plans**: create 4 plans: Standard monthly and
-   yearly, Extended monthly and yearly. Note each `plan_…` id.
-2. **Settings → API Keys**: generate a test key (`rzp_test_…` and its secret).
+1. Razorpay Dashboard (Test Mode) → **Settings → API Keys**: generate a test key (`rzp_test_…` and its
+   secret). Put both in `.env.local` as `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`; it's git-ignored.
+2. Create the 4 plans (Standard ₹499/month or ₹4,999/year; Extended ₹999/month or ₹9,999/year):
+
+   ```bash
+   node scripts/create-razorpay-plans.mjs
+   ```
+
+   It prints the plan ids and the `supabase secrets set` command to run. Re-running is safe: existing
+   plans are reused. To change prices, edit `PRICES` in the script and run it again (Razorpay plans can't
+   be edited, so new prices create new plans; existing subscribers keep their old price).
 3. Run `supabase/migrations/0007_billing.sql`, then deploy:
 
    ```bash
