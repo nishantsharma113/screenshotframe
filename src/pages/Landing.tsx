@@ -53,7 +53,9 @@ export function Landing() {
 
       <section className="container hero">
         <span className="pill">For iOS and Android developers</span>
-        <h1>Store screenshots that make people tap Install</h1>
+        <h1>
+          Store screenshots that make people <span className="hero__accent">tap Install</span>
+        </h1>
         <p className="hero__lead">
           Put your app in real device frames, add headlines, and export every size the App Store and Google Play ask
           for — in a few minutes, right in your browser.
@@ -82,6 +84,7 @@ export function Landing() {
 
       <section id="features" className="band">
         <div className="container section">
+          <span className="eyebrow">Features</span>
           <h2>Everything a store listing needs</h2>
           <p className="section__lead">Built for indie developers and small teams who would rather ship than fight a design tool.</p>
           <div className="card-grid">
@@ -99,6 +102,7 @@ export function Landing() {
       </section>
 
       <section className="container section">
+        <span className="eyebrow">How it works</span>
         <h2>Three steps to a finished listing</h2>
         <ol className="card-grid steps">
           <li>
@@ -175,6 +179,7 @@ export function Landing() {
       )}
 
       <section id="faq" className="container section faq">
+        <span className="eyebrow">FAQ</span>
         <h2>Questions</h2>
         {FAQ.map(([q, a]) => (
           <details key={q}>
