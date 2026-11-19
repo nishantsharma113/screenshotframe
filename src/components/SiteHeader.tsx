@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEditorLink } from '@/hooks/useEditorLink';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { Logo } from './Logo';
+import { ThemeToggle } from './ThemeToggle';
 
 export function SiteHeader() {
   const { user, isAdmin, signOut } = useAuth();
@@ -13,6 +14,7 @@ export function SiteHeader() {
       <div className="container site-header__inner">
         <Logo />
         <nav aria-label="Main" className="site-nav">
+          {user && <NavLink to="/projects">My projects</NavLink>}
           <a href={`${import.meta.env.BASE_URL}#features`}>Features</a>
           <NavLink to="/templates">Templates</NavLink>
           <NavLink to="/icon">Icon generator</NavLink>
@@ -20,6 +22,7 @@ export function SiteHeader() {
           <a href={`${import.meta.env.BASE_URL}#faq`}>FAQ</a>
         </nav>
         <div className="site-header__actions">
+          <ThemeToggle />
           {isSupabaseConfigured &&
             (user ? (
               <>
@@ -28,9 +31,6 @@ export function SiteHeader() {
                     Admin · Pro
                   </span>
                 )}
-                <Link to="/projects" className="btn btn--ghost">
-                  My projects
-                </Link>
                 {BILLING_ENABLED && (
                   <Link to="/account/billing" className="btn btn--ghost">
                     Billing

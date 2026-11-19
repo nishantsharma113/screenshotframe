@@ -52,39 +52,34 @@ export function Landing() {
       <SiteHeader />
 
       <section className="container hero">
-        <span className="pill">For iOS and Android developers</span>
-        <h1>
-          Store screenshots that make people <span className="hero__accent">tap Install</span>
-        </h1>
-        <p className="hero__lead">
-          Put your app in real device frames, add headlines, and export every size the App Store and Google Play ask
-          for — in a few minutes, right in your browser.
-        </p>
-        <div className="hero__cta">
-          <Link to={editorLink} className="btn btn--primary btn--lg">
-            Start designing — it’s free
-          </Link>
-          <Link to="/templates" className="btn btn--outline btn--lg">
-            Browse templates
-          </Link>
-        </div>
-        <p className="muted small">No account needed to start</p>
-      </section>
-
-      <section className="container hero-strip" aria-label="Example screenshots">
-        <div className="hero-strip__scroll">
-          <div className="hero-strip__row">
-            {heroDesign.slides.map((s, i) => (
-              <SlideView key={s.id} design={heroDesign} slide={s} index={i} size={getDevice('iphone').previewSize} scale={0.5} />
-            ))}
+        <div className="hero__copy">
+          <span className="pill">App Store + Google Play</span>
+          <h1>Store screenshots that get the install</h1>
+          <p className="hero__lead">
+            Drop in your app screens, add headlines and export every required size for both stores, in every language, in
+            one ZIP.
+          </p>
+          <div className="hero__cta">
+            <Link to={editorLink} className="btn btn--primary btn--lg">
+              Start designing — free
+            </Link>
+            <Link to="/templates" className="btn btn--outline btn--lg">
+              Browse templates
+            </Link>
           </div>
+          <p className="muted small">No account needed. Your first project saves in this browser.</p>
         </div>
-        <p className="muted small center">One panoramic background flows across all five screenshots.</p>
+        <div className="hero__fan" role="img" aria-label="Example store screenshots">
+          {heroDesign.slides.slice(0, 3).map((s, i) => (
+            <div key={s.id} className={`hero__card hero__card--${i}`}>
+              <SlideView design={heroDesign} slide={s} index={i} size={getDevice('iphone').previewSize} scale={0.46} />
+            </div>
+          ))}
+        </div>
       </section>
 
       <section id="features" className="band">
         <div className="container section">
-          <span className="eyebrow">Features</span>
           <h2>Everything a store listing needs</h2>
           <p className="section__lead">Built for indie developers and small teams who would rather ship than fight a design tool.</p>
           <div className="card-grid">
@@ -102,8 +97,7 @@ export function Landing() {
       </section>
 
       <section className="container section">
-        <span className="eyebrow">How it works</span>
-        <h2>Three steps to a finished listing</h2>
+        <h2>From screens to store in three steps</h2>
         <ol className="card-grid steps">
           <li>
             <span className="steps__num">1</span>
@@ -112,15 +106,36 @@ export function Landing() {
           </li>
           <li>
             <span className="steps__num">2</span>
-            <h3>Pick a template and edit</h3>
-            <p>Change the device, background, headlines and fonts.</p>
+            <h3>Style every slide</h3>
+            <p>Device, background and headline, for all slides or just one.</p>
           </li>
           <li>
             <span className="steps__num">3</span>
-            <h3>Export every size</h3>
-            <p>Download one ZIP with the exact sizes each store requires.</p>
+            <h3>Export one ZIP</h3>
+            <p>Every required size and language, named and sorted.</p>
           </li>
         </ol>
+      </section>
+
+      <section className="container promo-wrap">
+        <div className="promo">
+          <div className="promo__icons" aria-hidden="true">
+            <span className="promo__icon promo__icon--lg">
+              <Icon name="check" size={40} />
+            </span>
+            <span className="promo__icon promo__icon--md">
+              <Icon name="check" size={28} />
+            </span>
+            <span className="promo__icon promo__icon--sm" />
+          </div>
+          <div className="promo__copy">
+            <h2>Need an app icon too?</h2>
+            <p>Upload one 1024 px image and get every iOS and Android icon size, previewed on a real home screen.</p>
+          </div>
+          <Link to="/icon" className="btn btn--outline btn--lg">
+            Open icon generator
+          </Link>
+        </div>
       </section>
 
       {BILLING_ENABLED && (
@@ -167,7 +182,7 @@ export function Landing() {
                         </li>
                       ))}
                     </ul>
-                    <Link to={planLink(id)} className={`btn btn--lg ${p.popular ? 'btn--white' : 'btn--dark'}`}>
+                    <Link to={planLink(id)} className={`btn btn--lg ${p.popular ? 'btn--primary' : 'btn--outline'}`}>
                       {!paid ? 'Start free' : `Choose ${p.name}`}
                     </Link>
                   </div>
@@ -179,7 +194,6 @@ export function Landing() {
       )}
 
       <section id="faq" className="container section faq">
-        <span className="eyebrow">FAQ</span>
         <h2>Questions</h2>
         {FAQ.map(([q, a]) => (
           <details key={q}>
@@ -187,16 +201,6 @@ export function Landing() {
             <p>{a}</p>
           </details>
         ))}
-      </section>
-
-      <section className="container cta-band-wrap">
-        <div className="cta-band">
-          <h2>Your next release deserves better screenshots</h2>
-          <p>Open the editor and have a full set ready before your build finishes uploading.</p>
-          <Link to={editorLink} className="btn btn--white btn--lg">
-            Start designing
-          </Link>
-        </div>
       </section>
 
       <footer className="site-footer">

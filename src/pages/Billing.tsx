@@ -205,7 +205,7 @@ export function Billing() {
                 </ul>
                 <button
                   type="button"
-                  className={`btn btn--lg ${cfg.popular ? 'btn--white' : 'btn--dark'}`}
+                  className={`btn btn--lg ${cfg.popular ? 'btn--primary' : 'btn--outline'}`}
                   disabled={!action || busy !== null || !price}
                   onClick={action ?? undefined}
                 >

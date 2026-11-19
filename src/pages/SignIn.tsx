@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Icon } from '@/components/Icon';
 import { SiteHeader } from '@/components/SiteHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -22,6 +23,7 @@ export function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState('');
   /** Set after a magic link or confirmation email is sent. */
@@ -72,7 +74,7 @@ export function SignIn() {
   };
 
   const sending = status === 'sending';
-  const title = mode === 'signup' ? 'Create account' : 'Sign in';
+  const title = mode === 'signup' ? 'Create your account' : mode === 'magic' ? 'Sign in with a link' : 'Welcome back';
   const submitLabel =
     mode === 'magic'
       ? sending
@@ -120,13 +122,31 @@ export function SignIn() {
           ) : (
             <form onSubmit={submit} className="auth__form">
               {mode !== 'magic' && (
-                <div className="segmented auth__tabs" role="group" aria-label="Account">
-                  <button type="button" aria-pressed={mode === 'signin'} onClick={() => switchMode('signin')}>
+                <div className="segmented auth__tabs" role="tablist" aria-label="Account">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === 'signin'}
+                    aria-pressed={mode === 'signin'}
+                    onClick={() => switchMode('signin')}
+                  >
                     Sign in
                   </button>
-                  <button type="button" aria-pressed={mode === 'signup'} onClick={() => switchMode('signup')}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === 'signup'}
+                    aria-pressed={mode === 'signup'}
+                    onClick={() => switchMode('signup')}
+                  >
                     Create account
                   </button>
+                </div>
+              )}
+              {status === 'error' && (
+                <div className="alert alert--danger" role="alert">
+                  <Icon name="alert" size={16} />
+                  <span>{message}</span>
                 </div>
               )}
               {mode === 'magic' && <p className="muted">We’ll email you a magic link. No password needed.</p>}
@@ -144,15 +164,27 @@ export function SignIn() {
               {mode !== 'magic' && (
                 <>
                   <label htmlFor="password">Password</label>
-                  <input
-                    id="password"
-                    type="password"
-                    required
-                    minLength={mode === 'signup' ? MIN_PASSWORD : undefined}
-                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
+                  <div className="password">
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      minLength={mode === 'signup' ? MIN_PASSWORD : undefined}
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                      aria-invalid={status === 'error' || undefined}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="password__toggle"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      onClick={() => setShowPassword((v) => !v)}
+                    >
+                      <Icon name={showPassword ? 'eyeOff' : 'eye'} />
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -161,7 +193,7 @@ export function SignIn() {
                   <label htmlFor="confirm-password">Confirm password</label>
                   <input
                     id="confirm-password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete="new-password"
                     value={confirm}
@@ -175,19 +207,19 @@ export function SignIn() {
                 {submitLabel}
               </button>
 
-              {status === 'error' && (
-                <p className="error-text" role="alert">
-                  {message}
-                </p>
-              )}
-
+              <div className="auth__divider" aria-hidden="true">
+                or
+              </div>
               <button
                 type="button"
-                className="auth__switch"
+                className="btn btn--outline btn--lg"
                 onClick={() => switchMode(mode === 'magic' ? 'signin' : 'magic')}
               >
-                {mode === 'magic' ? 'Use email and password instead' : 'Forgot your password? Email me a sign-in link'}
+                {mode === 'magic' ? 'Use email and password instead' : 'Email me a magic link'}
               </button>
+              <p className="auth__foot">
+                You can also <Link to="/editor/local">keep working without an account</Link>.
+              </p>
             </form>
           )}
         </div>
