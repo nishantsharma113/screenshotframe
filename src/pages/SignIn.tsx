@@ -207,7 +207,7 @@ export function SignIn() {
                 {submitLabel}
               </button>
 
-              <div className="auth__divider" aria-hidden="true">
+              {/* <div className="auth__divider" aria-hidden="true">
                 or
               </div>
               <button
@@ -216,7 +216,7 @@ export function SignIn() {
                 onClick={() => switchMode(mode === 'magic' ? 'signin' : 'magic')}
               >
                 {mode === 'magic' ? 'Use email and password instead' : 'Email me a magic link'}
-              </button>
+              </button> */}
               <p className="auth__foot">
                 You can also <Link to="/editor/local">keep working without an account</Link>.
               </p>

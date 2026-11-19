@@ -1,22 +1,27 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { Icon } from '@/components/Icon';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import type { SaveStatus, Store } from '@/lib/types';
+import { SizePicker } from '@/components/editor/SizePicker';
+import type { Design, SaveStatus, Store } from '@/lib/types';
+import type { EditorAction } from '@/store/editorReducer';
 
 const STATUS_TEXT: Record<SaveStatus, string> = {
   idle: '',
   saving: 'Saving…',
   saved: 'Saved',
   local: 'Saved in this browser',
-  error: 'Not saved',
+  error: 'Couldn’t save',
 };
 
 interface TopBarProps {
   name: string;
   onRename: (name: string) => void;
   status: SaveStatus;
-  store: Store;
+  /** Save again after a failed save. */
+  onRetrySave: () => void;
+  design: Design;
+  dispatch: Dispatch<EditorAction>;
   onStore: (store: Store) => void;
   canUndo: boolean;
   canRedo: boolean;
@@ -24,6 +29,9 @@ interface TopBarProps {
   onRedo: () => void;
   onExport: () => void;
   onSaveTemplate: () => void;
+  /** Saved templates aren't on the user's plan: show a "Pro" badge on the menu item. */
+  templatesLocked: boolean;
+  onShortcuts: () => void;
 }
 
 export function TopBar(p: TopBarProps) {
@@ -45,10 +53,15 @@ export function TopBar(p: TopBarProps) {
     };
   }, [menuOpen]);
 
+  const choose = (action: () => void) => () => {
+    setMenuOpen(false);
+    action();
+  };
+
   return (
     <header className="topbar">
+      <Logo compact />
       <div className="topbar__left">
-        <Logo compact />
         <label className="sr-only" htmlFor="project-name">
           Project name
         </label>
@@ -62,22 +75,39 @@ export function TopBar(p: TopBarProps) {
         />
         <span className={`topbar__status is-${p.status}`} aria-live="polite">
           {STATUS_TEXT[p.status]}
+          {p.status === 'error' && (
+            <button type="button" className="topbar__retry" onClick={p.onRetrySave}>
+              Retry
+            </button>
+          )}
         </span>
       </div>
 
-      <div className="topbar__right">
-        <div className="segmented" role="group" aria-label="Store">
-          <button type="button" aria-pressed={p.store === 'ios'} onClick={() => p.onStore('ios')}>
-            App Store
-          </button>
-          <button type="button" aria-pressed={p.store === 'play'} onClick={() => p.onStore('play')}>
-            Google Play
-          </button>
-        </div>
-        <button type="button" className="icon-btn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!p.canUndo} onClick={p.onUndo}>
+      <div className="topbar__spacer" />
+
+      <div className="segmented" role="group" aria-label="Store">
+        <button type="button" aria-pressed={p.design.store === 'ios'} onClick={() => p.onStore('ios')}>
+          App Store
+        </button>
+        <button type="button" aria-pressed={p.design.store === 'play'} onClick={() => p.onStore('play')}>
+          Google Play
+        </button>
+      </div>
+
+      <SizePicker design={p.design} dispatch={p.dispatch} />
+
+      <div className="topbar__tools">
+        <button type="button" className="icon-btn" aria-label="Undo (Ctrl Z)" title="Undo (Ctrl Z)" disabled={!p.canUndo} onClick={p.onUndo}>
           <Icon name="undo" />
         </button>
-        <button type="button" className="icon-btn" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!p.canRedo} onClick={p.onRedo}>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Redo (Ctrl Shift Z)"
+          title="Redo (Ctrl Shift Z)"
+          disabled={!p.canRedo}
+          onClick={p.onRedo}
+        >
           <Icon name="redo" />
         </button>
         <ThemeToggle />
@@ -93,25 +123,23 @@ export function TopBar(p: TopBarProps) {
             <Icon name="more" />
           </button>
           {menuOpen && (
-            <div className="menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setMenuOpen(false);
-                  p.onSaveTemplate();
-                }}
-              >
+            <div className="menu menu--wide" role="menu">
+              <button type="button" role="menuitem" onClick={choose(p.onSaveTemplate)}>
                 Save as template
+                {p.templatesLocked && <span className="menu__badge">Pro</span>}
+              </button>
+              <button type="button" role="menuitem" onClick={choose(p.onShortcuts)}>
+                Keyboard shortcuts <kbd>?</kbd>
               </button>
             </div>
           )}
         </div>
-        <button type="button" className="btn btn--primary" onClick={p.onExport}>
-          <Icon name="download" size={16} />
-          Export
-        </button>
       </div>
+
+      <button type="button" className="btn btn--primary topbar__export" onClick={p.onExport}>
+        <Icon name="download" size={16} />
+        Export
+      </button>
     </header>
   );
 }

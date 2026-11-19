@@ -4,6 +4,7 @@ import { Canvas } from '@/components/editor/Canvas';
 import { ExportDialog } from '@/components/editor/ExportDialog';
 import { FeaturePanel } from '@/components/editor/FeaturePanel';
 import { SaveTemplateDialog } from '@/components/editor/SaveTemplateDialog';
+import { ShortcutsDialog } from '@/components/editor/ShortcutsDialog';
 import { LeftPanel } from '@/components/editor/LeftPanel';
 import { RightPanel, type FontUploadAccess } from '@/components/editor/RightPanel';
 import { TopBar } from '@/components/editor/TopBar';
@@ -26,6 +27,7 @@ export function Editor() {
   );
   const [showExport, setShowExport] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   /** A long-running action's status; shown in the toast until it finishes (notices auto-hide). */
@@ -65,10 +67,15 @@ export function Editor() {
 
   // Undo / redo shortcuts (not while typing in a field, and not behind the export dialog)
   useEffect(() => {
-    if (showExport || showSaveTemplate) return;
+    if (showExport || showSaveTemplate || showShortcuts) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest?.('input, textarea, select')) return;
+      if (target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShowShortcuts(true);
+        return;
+      }
       if (!(e.metaKey || e.ctrlKey)) return;
       const key = e.key.toLowerCase();
       if (key === 'z' || key === 'y') {
@@ -78,7 +85,7 @@ export function Editor() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [dispatch, showExport, showSaveTemplate]);
+  }, [dispatch, showExport, showSaveTemplate, showShortcuts]);
 
   // A file dropped outside a drop zone would make the browser open it and leave the editor.
   useEffect(() => {
@@ -247,7 +254,11 @@ export function Editor() {
         name={meta.name}
         onRename={rename}
         status={status}
-        store={design.store}
+        onRetrySave={() => void saveNow()}
+        design={design}
+        dispatch={dispatch}
+        templatesLocked={isSupabaseConfigured && !PLAN_FEATURES.userTemplates.includes(plan)}
+        onShortcuts={() => setShowShortcuts(true)}
         onStore={(store) => dispatch({ type: 'setStore', store })}
         canUndo={state.past.length > 0}
         canRedo={state.future.length > 0}
@@ -316,6 +327,7 @@ export function Editor() {
         )}
       </div>
 
+      {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
       {showExport && <ExportDialog design={design} projectName={projectName} onClose={() => setShowExport(false)} />}
       {showSaveTemplate && userId && (
         <SaveTemplateDialog

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react';
 import { Icon } from '@/components/Icon';
-import { SizePicker } from '@/components/editor/SizePicker';
 import { SWATCHES, effectiveBackdrop, mixHex, orientationOf, projectBackdrop } from '@/lib/constants';
 import type { Backdrop, Design } from '@/lib/types';
 import type { EditorAction } from '@/store/editorReducer';
@@ -36,19 +35,6 @@ export function LeftPanel({ design, selected, dispatch, uploading, onFiles, onBa
 
   return (
     <aside className="panel panel--left" aria-label="Design options">
-      <section className="panel__section">
-        <h2 className="panel__label">Size</h2>
-        <SizePicker design={design} dispatch={dispatch} />
-        <label className="field-row">
-          Landscape
-          <input
-            type="checkbox"
-            checked={landscape}
-            onChange={(e) => set({ orientation: e.target.checked ? 'landscape' : 'portrait' })}
-          />
-        </label>
-      </section>
-
       <section className="panel__section">
         <h2 className="panel__label">Background</h2>
         <div className="grid-2" role="group" aria-label="Background applies to">
